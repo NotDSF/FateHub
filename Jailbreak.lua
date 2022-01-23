@@ -39,6 +39,20 @@ local Vehicle = GetLocal("OnVehicleEntered");
 local Item = GetLocal("OnLocalItemEquipped");
 local InventoryUtils = GetLocal("getAttr");
 local InternalFunctions = GetLocal("hems");
+local LocalPlayer = game.Players.LocalPlayer;
+local UserInputService = game.UserInputService;
+local Camera = game.Workspace.CurrentCamera;
+local WorldToViewportPoint = Camera.WorldToViewportPoint;
+local BackupMt;
+
+BackupMt = hookmetamethod(game, "__index", newcclosure(function(self, idx) 
+    if idx == "WalkSpeed" then
+        return 16;
+    elseif idx == "JumpPower" then
+        return 50;
+    end;
+    return BackupMt(self, idx);
+end));
 
 for i,v in pairs(InternalFunctions) do
     if type(v) == "function" and table.find(debug.getconstants(v), "%d/%d") then
@@ -61,6 +75,17 @@ do
             Flags.InfiniteNitro = bool;
         end,
         Enabled = false
+    });
+
+    VehiclePage.Toggle({
+        Text = "No Tire Pop",
+        Callback = function(bool) 
+            local Packet = Vehicle.GetLocalVehiclePacket();
+            if Packet then
+                Packet.TirePopDuration = 0;
+            end;
+            VehicleConfig.TirePopDuration = 0;
+        end;
     });
 
     VehiclePage.Slider({
@@ -160,7 +185,6 @@ do
             VehicleConfig.GarageBrakes = value or 1;
         end;
     });
-
 end;
 
 -- Combat
@@ -255,7 +279,118 @@ do
         end,
         Enabled = false
     });
+
+    Misc.Toggle({
+        Text = "No Cooldown",
+        Callback = function(bool) 
+            for i,v in pairs(getgc(true)) do
+                if type(v) == "table" and rawget(v, "Duration") then
+                    if not v.Backup then
+                        v.Backup = v.Duration;
+                    end;
+                    rawset(v, "Duration", bool and 0 or v.Backup);
+                end;
+            end;
+        end,
+        Enabled = false
+    });
 end;
+
+-- Player
+do
+    local Player = UI.New({
+        Title = "Player"
+    });
+
+    Player.Toggle({
+        Text = "No Ragdoll",
+        Callback = function(bool) 
+            Flags.NoRagdoll = bool;
+        end,
+        Enabled = false;
+    });
+
+    Player.Slider({
+        Text = "WalkSpeed",
+        Min = 1,
+        Def = 16,
+        Max = 200,
+        Callback = function(value) 
+            LocalPlayer.Character.Humanoid.WalkSpeed = value;
+        end
+    })
+
+    Player.Slider({
+        Text = "JumpPower",
+        Min = 1,
+        Def = 50,
+        Max = 200,
+        Callback = function(value) 
+            LocalPlayer.Character.Humanoid.JumpPower = value;
+        end
+    });
+
+    local Falling = GetLocal("StartRagdolling");
+    local Backup;
+    Backup = hookfunction(Falling.StartRagdolling, function(...) 
+        if Flags.NoRagdoll then return end;
+        return Backup(...)
+    end);
+end;
+
+-- Aimbot
+local GetClosestPlayer; do 
+    local Aimbot = UI.New({
+        Title = "Aimbot"
+    });
+
+    Aimbot.Toggle({
+        Text = "Enabled",
+        Callback = function(bool) 
+            Flags.Aimbot = bool;
+        end
+    });
+
+    Aimbot.Dropdown({
+        Text = "Target Part",
+        Callback = function(value) 
+            Flags.AimbotTarget = value;
+        end,
+        Options = {
+            "Head",
+            "HumanoidRootPart"
+        }
+    });
+
+    GetClosestPlayer = function() 
+        if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end;
+    
+        local LPos = LocalPlayer.Character.HumanoidRootPart.Position;
+        local Players = {};
+    
+        for i,v in pairs(game.Players:GetChildren()) do
+            if v ~= LocalPlayer then
+                local Character = v.Character;
+                local HumanoidRootPart = Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart");
+                if HumanoidRootPart then
+                    if v.TeamColor == LocalPlayer.TeamColor then
+                        continue;
+                    end;
+    
+                    local _, Visible = WorldToViewportPoint(Camera, HumanoidRootPart.Position);
+                    if Visible then
+                        local Between = (HumanoidRootPart.Position - LPos).magnitude;
+                        Players[#Players+1] = {Between, Character};
+                    end;
+                end;
+            end;
+        end;
+    
+        table.sort(Players, function(x,y) return x[1] < y[1] end);
+    
+        return Players[1] and Players[1][2];
+    end;
+end
 
 Vehicle.OnVehicleEntered:Connect(function(Vehicle) 
     warn("debug: entered vehicle");
@@ -283,6 +418,11 @@ Item.OnLocalItemEquipped:Connect(function(Item)
             Item.Config[i] = GunConfig[i];
         end;
     end;
+    Flags.ItemEquipped = true;
+end);
+
+Item.OnLocalItemUnequipped:Connect(function() 
+    Flags.ItemEquipped = false;
 end);
 
 game.RunService.Stepped:Connect(function() 
@@ -291,6 +431,18 @@ game.RunService.Stepped:Connect(function()
             Event:FireServer("l59h3mcg", v);
         end;
     end;
+
+    if Flags.Aimbot and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) and Flags.ItemEquipped then
+        local Closest = GetClosestPlayer();
+        if Closest then
+            local Target = Flags.AimbotTarget or "Head";
+            local _, Visible = WorldToViewportPoint(Camera, Closest[Target].Position);
+            if Visible then
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, Closest[Target].Position);
+                --Camera.CFrame = CFrame(Camera.CFrame.Position, Closest[Target].Position); for first person
+            end;
+        end
+    end
 end);
 
 -- Will add more features later
