@@ -1,6 +1,7 @@
+local TNow = tick();
 local Lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kinlei/MaterialLua/master/Module.lua"))();
 local UI = Lib.Load({
-    Title = "Fates Hub | Jailbreak",
+    Title = "Fates Hub",
     Style = 1,
     SizeX = 400,
     SizeY = 400,
@@ -13,6 +14,15 @@ local function GetLocal(index)
             return v;
         end;
     end;
+end;
+
+local function SynapseNotification(Content, Type) 
+    syn.toast_notification({
+        Type = Type or ToastType.Info,
+        Duration = 7.5,
+        Title = "Fates Hub",
+        Content = Content
+    });
 end;
 
 local __equiped;
@@ -85,6 +95,25 @@ do
                 Packet.TirePopDuration = 0;
             end;
             VehicleConfig.TirePopDuration = 0;
+        end;
+    });
+
+    VehiclePage.Toggle({
+        Text = "Ninja",
+        Callback = function(bool) 
+            Flags.Ninja = bool;
+        end;
+    });
+
+    VehiclePage.Button({
+        Text = "Fly",
+        Callback = function() 
+            local Packet = Vehicle.GetLocalVehiclePacket();
+            if Packet then
+                Packet.Lift.Force = Vector3.new(0, 999999, 0);
+                return;
+            end;
+            SynapseNotification("You must be in a vehicle!", ToastType.Error);
         end;
     });
 
@@ -273,6 +302,22 @@ do
     });
 
     Misc.Toggle({
+        Text = "Auto Pickpocket",
+        Callback = function(bool) 
+            Flags.Pickpocket = bool
+        end,
+        Enabled = false
+    });
+
+    Misc.Toggle({
+        Text = "Auto Arrest",
+        Callback = function(bool) 
+            Flags.Arrest = bool;
+        end,
+        Enabled = false;
+    });
+
+    Misc.Toggle({
         Text = "Loop Eject",
         Callback = function(bool) 
             Flags.EjectLoop = bool;
@@ -369,18 +414,14 @@ local GetClosestPlayer; do
         local Players = {};
     
         for i,v in pairs(game.Players:GetChildren()) do
-            if v ~= LocalPlayer then
+            if v ~= LocalPlayer and v.TeamColor ~= LocalPlayer.TeamColor then
                 local Character = v.Character;
-                local HumanoidRootPart = Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart");
+                local HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart");
                 if HumanoidRootPart then
-                    if v.TeamColor == LocalPlayer.TeamColor then
-                        continue;
-                    end;
-    
                     local _, Visible = WorldToViewportPoint(Camera, HumanoidRootPart.Position);
                     if Visible then
                         local Between = (HumanoidRootPart.Position - LPos).magnitude;
-                        Players[#Players+1] = {Between, Character};
+                        Players[#Players+1] = {Between, v};
                     end;
                 end;
             end;
@@ -436,14 +477,58 @@ game.RunService.Stepped:Connect(function()
         local Closest = GetClosestPlayer();
         if Closest then
             local Target = Flags.AimbotTarget or "Head";
-            local _, Visible = WorldToViewportPoint(Camera, Closest[Target].Position);
+            local _, Visible = WorldToViewportPoint(Camera, Closest.Character[Target].Position);
             if Visible then
-                Camera.CFrame = CFrame.new(Camera.CFrame.Position, Closest[Target].Position);
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, Closest.Character[Target].Position);
                 --Camera.CFrame = CFrame(Camera.CFrame.Position, Closest[Target].Position); for first person
             end;
-        end
-    end
+        end;
+    end;
+
+    if Flags.Ninja then
+        local Closest = GetClosestPlayer();
+        local Vehicle = Vehicle.GetLocalVehiclePacket();
+        if Vehicle and Closest then
+            local C = (Closest.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).magnitude;
+            if C < 100 then
+                if not Vehicle.BackupLift then
+                    SynapseNotification("Ninja mode activated.");
+                    Vehicle.BackupLift = Vehicle.Lift.Force;
+                    Vehicle.Lift.Force = Vector3.new(0, 999999, 0);
+                end;
+            elseif Vehicle.BackupLift then
+                Vehicle.Lift.Force = Vehicle.BackupLift;
+                Vehicle.BackupLift = nil;
+                SynapseNotification("Ninja mode deactivated.");
+            end;
+        end;
+    end;
+
+    if Flags.Pickpocket then
+        local Closest = GetClosestPlayer();
+        if Closest and tostring(Closest.Team) == "Police" then
+            if Flags.PickpocketRebounce - tick() < 2 then return end;
+            local C = (Closest.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).magnitude; 
+            if C > 10 then return end;
+
+            Event:FireServer("navdmccv", Closest.Name);
+            SynapseNotification(string.format("Pickpocketed %s. Run!", Closest.Name));
+            Flags.PickpocketRebounce = tick();
+        end;
+    end;
+
+    if Flags.Arrest then
+        local Closest = GetClosestPlayer();
+        if Closest and tostring(Closest.Team) == "Criminal" then
+            local C = (Closest.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).magnitude; 
+            if C > 10 then return end;
+
+            Event:FireServer("rc4rrrvd", Closest.Name);
+        end;
+    end;
 end);
+
+SynapseNotification(string.format("Loaded in %ss", tick() - TNow), ToastType.Success);
 
 -- Will add more features later
 
