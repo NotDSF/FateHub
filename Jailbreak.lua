@@ -1,29 +1,111 @@
+-- The types are just to help me with remembering the names
+
+type ChassisType = {
+    setBackward: (p1: any) -> (...any),
+    VehicleEnter: (p1: any) -> (...any),
+    UpdateSoundLowQuality: (p1: any, p2: any, p3: any) -> (...any),
+    UpdateStats: (p1: any) -> (...any),
+    VehicleLeave: (p1: any) -> (...any),
+    UnlockCamera: (p1: any) -> (...any),
+    runAction: (p1: any) -> (...any),
+    UpdatePrePhysics: (p1: any, p2: any) -> (...any),
+    InputChanged: (p1: any) -> (...any),
+    InputBegan: (p1: any) -> (...any),
+    InputEnded: (p1: any) -> (...any),
+    SetEvent: (p1: any) -> (...any),
+    toggleSirens: () -> (...any),
+    SpinOut: (p1: any) -> (...any),
+    init: (p1: any) -> (...any),
+    AttemptFireMissile: (p1: any) -> (...any),
+    LockCamera: (p1: any) -> (...any),
+    SetWheelsVisible: (p1: any, p2: any) -> (...any),
+    setForward: (p1: any) -> (...any),
+    Halt: (p1: any) -> (...any),
+    toggleHeadlights: () -> (...any),
+    toggleInsideCamera: (p1: any) -> (...any),
+    setHandbrakeEnabled: (p1: any) -> (...any),
+    UpdatePostPhysics: (p1: any) -> (...any),
+    UpdateForces: (p1: any, p2: any) -> (...any),
+    UpdateWheelLowQuality: (p1: any, p2: any, p3: any, p4: any) -> (...any),
+    SetGravity: (p1: any, p2: any) -> (...any)
+}
+
+type VehicleType = {
+    updateSpdBarRatio: (p1: any) -> (...any),
+    prepareCameraSubject: (p1: any, p2: any) -> (...any),
+    setBrakelightsEnabled: (p1: any, p2: any) -> (...any),
+    canLocalLock: () -> (...any),
+    GetLocalVehiclePacket: () -> (...any),
+    CleanVehicleModel: (p1: any) -> (...any),
+    promptMissileBuy: () -> (...any),
+    OnVehicleExited: table,
+    OnVehicleJumpExited: table,
+    getHeadlights: (p1: any) -> (...any),
+    NitroShopVisible: (p1: any, p2: any) -> (...any),
+    Init: (p1: any) -> (...any),
+    OnVehicleEntered: table,
+    _forceUpdateNitroBar: boolean,
+    GetLocalVehicleModel: () -> (...any),
+    attemptPassengerEject: (p1: any) -> (...any),
+    Classes: table,
+    spdBarRatio: table,
+    LastVehicleExit: number,
+    attemptBuyMissiles: () -> (...any),
+    canLocalEject: () -> (...any),
+    LastVehicleEject: number,
+    toggleLocalLocked: () -> (...any),
+    getSeats: (p1: any) -> (...any),
+}
+
+if getgenv().FatesHub then error("Fates Hub already loaded!"); end;
+getgenv().FatesHub = true;
+
+ToastType = ToastType or {};
+
 local TNow = tick();
 local Lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kinlei/MaterialLua/master/Module.lua"))();
 local UI = Lib.Load({
     Title = "Fates Hub",
     Style = 1,
-    SizeX = 400,
-    SizeY = 400,
+    SizeX = 500,
+    SizeY = 600,
     Theme = "Dark"
 });
 
+local Rawget = rawget;
+local Type = typeof;
+local Getgc = getgc;
+local Pairs = pairs;
+local info = debug.info;
+local ToastNotif = syn.toast_notification;
+
 local function GetLocal(index) 
-    for i,v in pairs(getgc(true)) do
-        if type(v) == "table" and rawget(v, index) then
+    for i,v in Pairs(Getgc(true)) do
+        if Type(v) == "table" and Rawget(v, index) then
+            return v;
+        end;
+    end;
+end;
+
+local function GetFunction(name) 
+    for i,v in Pairs(Getgc()) do
+        if Type(v) == "function" and info(v, "n") == name then
             return v;
         end;
     end;
 end;
 
 local function SynapseNotification(Content, Type) 
-    syn.toast_notification({
+    if not ToastNotif then return warn(Content); end;
+    ToastNotif({
         Type = Type or ToastType.Info,
         Duration = 7.5,
-        Title = "Fates Hub",
+        Title = "Fates Hub v1.0.1b",
         Content = Content
     });
 end;
+
+SynapseNotification("ALERT: You are running a beta version of Fates Hub.\nPlease report any bugs to the discord server.\nIf you aren't you should use an alt.");
 
 local __equiped;
 local __methods = {
@@ -36,36 +118,93 @@ local __methods = {
     end
 }
 
-local WepTypes = {
-    Rifle = require(game.ReplicatedStorage.Game.Item.Rifle);
-}
-
 local Flags = {};
 local GunConfig = setmetatable({}, __methods);
 local VehicleConfig = setmetatable({}, __methods);
 
 local Event = GetLocal("FireServer");
-local Vehicle = GetLocal("OnVehicleEntered");
+local Vehicle: VehicleType = GetLocal("OnVehicleEntered");
 local Item = GetLocal("OnLocalItemEquipped");
+local Equipped = GetLocal("addEquipCondition");
 local InventoryUtils = GetLocal("getAttr");
+local Chassis: ChassisType = GetLocal("SetGravity");
 local InternalFunctions = GetLocal("hems");
+local MakeId = require(game.ReplicatedStorage.Game.Garage.EnumMake);
 local LocalPlayer = game.Players.LocalPlayer;
 local UserInputService = game.UserInputService;
-local Camera = game.Workspace.CurrentCamera;
+local TweenService = game.TweenService;
+local Workspace = game.Workspace;
+local Camera = Workspace.CurrentCamera;
 local WorldToViewportPoint = Camera.WorldToViewportPoint;
-local BackupMt;
+local IsMouseButtonPressed = UserInputService.IsMouseButtonPressed;
+local GetChildren = game.GetChildren;
+local FindFirstChild = game.FindFirstChild;
+local CFrame = CFrame.new;
+local Vector3 = Vector3.new;
+local sort = table.sort;
+local getupvalue = debug.getupvalue;
+local setupvalue = debug.setupvalue;
+local Tostring = tostring;
+local BackupIndex, BackupNewIndex;
 
-BackupMt = hookmetamethod(game, "__index", newcclosure(function(self, idx) 
-    if idx == "WalkSpeed" then
-        return 16;
-    elseif idx == "JumpPower" then
-        return 50;
+local Keys = {};
+
+-- AutoUpdate
+do
+    local FakeNetwork = {};
+    function FakeNetwork:FireServer(key) 
+        Keys[info(2, "n")] = key; -- Will get the function calling fireserver (AttemptVehicleEject for example)
     end;
-    return BackupMt(self, idx);
+    
+    local function GetKey(name, ...) 
+        local CurrentFunction, Backupnetwork;
+
+        CurrentFunction = GetFunction(name);
+        Backupnetwork = getupvalue(CurrentFunction, 1);
+        setupvalue(CurrentFunction, 1, FakeNetwork);
+        CurrentFunction(...);
+        setupvalue(CurrentFunction, 1, Backupnetwork);
+    end;
+
+    GetKey("AttemptVehicleEject");
+    GetKey("AttemptPickPocket", {});
+    GetKey("AttemptArrest", {});
+end;
+
+for i,v in pairs(Keys) do
+    rconsoleinfo(string.format("Automatically grabbed %s key: %s\n", i, v));
+end;
+
+local BackupChassis = Chassis.UpdatePrePhysics;
+Chassis.UpdatePrePhysics = function(...) 
+    if Flags.VehicleChassisDisable then return end;
+    return BackupChassis(...);
+end;
+
+for i,v in pairs(Getgc(true)) do
+    if Type(v) == "function" and debug.getinfo(v).name == "CheatCheck" then
+        hookfunction(v, function() end);
+    end;
+end;
+
+BackupIndex = hookmetamethod(game, "__index", newcclosure(function(self, idx) 
+    if idx == "WalkSpeed" then
+        return 15;
+    elseif idx == "JumpPower" then
+        return 5;
+    end;
+    return BackupIndex(self, idx);
 end));
 
-for i,v in pairs(InternalFunctions) do
-    if type(v) == "function" and table.find(debug.getconstants(v), "%d/%d") then
+BackupNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(self, idx, val) 
+    if not checkcaller() and Flags[idx] then
+        val = val + Flags[idx];
+    end;
+    return BackupNewIndex(self, idx, val);
+end));
+
+for i,v in Pairs(InternalFunctions) do
+    if Type(v) == "function" and table.find(debug.getconstants(v), "%d/%d") then
         InternalFunctions[i] = function(nitro, nitromax) 
             warn(string.format("debug: nitro %d %d", nitro, nitromax));
             return v(Flags.InfiniteNitro and math.huge or nitro, nitromax);
@@ -81,7 +220,17 @@ do
 
     VehiclePage.Toggle({
         Text = "Infinite Nitro",
-        Callback = function(bool) 
+        Callback = function(bool)
+            local NitroTable = GetLocal("NitroLastMax");
+            if bool then
+                NitroTable.NitroB = NitroTable.Nitro;
+                NitroTable.NitroMaxB = NitroTable.NitroLastMax; 
+                NitroTable.Nitro = math.huge;
+                NitroTable.NitroLastMax = math.huge;
+            elseif NitroTable.NitroB then
+                NitroTable.Nitro = NitroTable.NitroB;
+                NitroTable.NitroLastMax = NitroTable.NitroMaxB; 
+            end;
             Flags.InfiniteNitro = bool;
         end,
         Enabled = false
@@ -91,10 +240,28 @@ do
         Text = "No Tire Pop",
         Callback = function(bool) 
             local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet then
+            if Packet and bool then
                 Packet.TirePopDuration = 0;
+            elseif Packet then
+                if not Packet.TirePopDurationBackup then
+                    Packet.TirePopDurationBackup = Packet.TirePopDuration;
+                end
+                Packet.TirePopDuration = Packet.TirePopDurationBackup;
             end;
-            VehicleConfig.TirePopDuration = 0;
+        end;
+    });
+
+    VehiclePage.Toggle({
+        Text = "Vehicle Fly",
+        Callback = function(bool)
+            local Packet = Vehicle.GetLocalVehiclePacket();
+            if Flags.VehicleFly and Packet and Packet.Mass then
+                Chassis.SetGravity(Packet, 20);
+            end;
+            if Packet and not Packet.Mass and bool then
+                SynapseNotification("Your current vehicle is not supported.\nIf you enter a supported vehicle then vehicle fly will automatically be applied.", ToastType.Error);
+            end;
+            Flags.VehicleFly = bool;
         end;
     });
 
@@ -105,15 +272,17 @@ do
         end;
     });
 
-    VehiclePage.Button({
-        Text = "Fly",
-        Callback = function() 
+    VehiclePage.Slider({
+        Text = "Gravity",
+        Min = 1,
+        Max = 100,
+        Def = 20,
+        Callback = function(value) 
             local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet then
-                Packet.Lift.Force = Vector3.new(0, 999999, 0);
-                return;
+            if Packet and Packet.Mass then
+                Chassis.SetGravity(Packet, value);
             end;
-            SynapseNotification("You must be in a vehicle!", ToastType.Error);
+            --VehicleConfig.Lift.Force = Vector3.new(0, VehicleConfig.Lift.Force.Y * value, 0);
         end;
     });
 
@@ -214,6 +383,41 @@ do
             VehicleConfig.GarageBrakes = value or 1;
         end;
     });
+
+    local Vehicles = {};
+    for i,v in pairs(require(game.ReplicatedStorage.Game.Garage.VehicleData)) do
+        Vehicles[i] = v.Make;
+    end;
+    sort(Vehicles);
+
+    VehiclePage.Dropdown({
+        Text = "Emulate Vehicle",
+        Callback = function(value) 
+            local Packet = Vehicle.GetLocalVehiclePacket();
+            if Packet then
+                Packet.Make = value;
+                Packet.EnumMakeId = MakeId[value];
+            end;
+            Flags.EmulateVehicle = value;
+        end,
+        Options = Vehicles
+    });
+
+    Flags.VehicleColor = VehiclePage.ColorPicker({
+        Text = "Vehicle Color",
+        Default = Color3.fromRGB(255, 0, 0),
+        Callback = function(value) 
+            local Packet = Vehicle.GetLocalVehiclePacket();
+            if Packet then
+                Packet.Model.Model.Body.Color = value;
+            end;
+        end;
+    });
+
+    local Packet = Vehicle.GetLocalVehiclePacket();
+    if Packet then
+        Flags.VehicleColor:SetColor(Packet.Model.Model.Body.Color);
+    end;
 end;
 
 -- Combat
@@ -231,7 +435,7 @@ do
             if __equiped and __equiped.Config then
                 __equiped.Config.FireFreq = __equiped.Config.FireFreq * value;
             end;
-            GunConfig.FireFreq = GunConfig.FireFreq * value;
+            GunConfig.FireFreq = (GunConfig.FireFreq or 5) * value;
         end;
     });
 
@@ -281,24 +485,36 @@ do
         end,
         Enabled = false
     });
-
-    GunPage.Dropdown({
-        Text = "Emulate Weapon",
-        Callback = function(Value) 
-            if WepTypes[Value] then
-                GunConfig = setmetatable(WepTypes[Value], __methods);
-            end;
-        end,
-        Options = {
-            "Rifle"
-        }
-    });
 end;
 
 -- Misc
 do 
     local Misc = UI.New({
         Title = "Misc"
+    });
+
+    Misc.Button({
+        Text = "Open All Doors",
+        Callback = function() 
+            local OpenF = GetFunction("DoorSequence");
+            for i,v in Pairs(Getgc(true)) do 
+                if Type(v) == "table" and Rawget(v, "Settings") and Rawget(v, "State") then
+                    if v.Settings.ServerOnly or v.State.Open then continue; end;
+                    OpenF(v);
+                end;
+            end;
+        end;
+    });
+
+    Misc.Button({
+        Text = "Remove Lasers",
+        Callback = function() 
+            for i,v in Pairs(game.Workspace:GetDescendants()) do
+                if v.Name == "Lasers" then
+                    v:Destroy();
+                end;
+            end;
+        end;
     });
 
     Misc.Toggle({
@@ -318,7 +534,7 @@ do
     });
 
     Misc.Toggle({
-        Text = "Loop Eject",
+        Text = "Auto Eject",
         Callback = function(bool) 
             Flags.EjectLoop = bool;
         end,
@@ -328,8 +544,8 @@ do
     Misc.Toggle({
         Text = "No Cooldown",
         Callback = function(bool) 
-            for i,v in pairs(getgc(true)) do
-                if type(v) == "table" and rawget(v, "Duration") then
+            for i,v in Pairs(Getgc(true)) do
+                if Type(v) == "table" and Rawget(v, "Duration") then
                     if not v.Backup then
                         v.Backup = v.Duration;
                     end;
@@ -338,6 +554,13 @@ do
             end;
         end,
         Enabled = false
+    });
+
+    Misc.Button({
+        Text = "Rejoin",
+        Callback = function() 
+            game.TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId);
+        end
     });
 end;
 
@@ -362,8 +585,9 @@ do
         Max = 200,
         Callback = function(value) 
             LocalPlayer.Character.Humanoid.WalkSpeed = value;
+            Flags.WalkSpeed = value;
         end
-    })
+    });
 
     Player.Slider({
         Text = "JumpPower",
@@ -372,16 +596,64 @@ do
         Max = 200,
         Callback = function(value) 
             LocalPlayer.Character.Humanoid.JumpPower = value;
-        end
+            Flags.JumpPower = value;
+        end;
     });
 
     local Falling = GetLocal("StartRagdolling");
     local Backup;
     Backup = hookfunction(Falling.StartRagdolling, function(...) 
         if Flags.NoRagdoll then return end;
-        return Backup(...)
+        return Backup(...);
     end);
 end;
+
+-- Teleport 
+--[[
+    do 
+    local TeleportUI = UI.New({
+        Title = "Teleports"
+    });
+
+    local function Teleport(Pos) 
+        local TimeRequired = 80 + math.floor((LocalPlayer.Character.HumanoidRootPart.Position - Pos).magnitude / 100);
+        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame(LocalPlayer.Character.HumanoidRootPart.Position.X, 2000, LocalPlayer.Character.HumanoidRootPart.Position.Z);
+        local Tween = TweenService.Create(TweenService, LocalPlayer.Character.HumanoidRootPart, TweenInfo.new(TimeRequired), {CFrame=CFrame(Vector3(Pos.X, 2000, Pos.Z))});
+        Tween:Play();
+        SynapseNotification(string.format("Teleport in progress...\nUnfortunately due to security reasons this will take %ds.", TimeRequired));
+        Tween.Completed:Wait();
+        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame(LocalPlayer.Character.HumanoidRootPart.Position.X, Pos.Y + 10, LocalPlayer.Character.HumanoidRootPart.Position.Z);
+    end;
+
+    TeleportUI.Button({
+        Text = "Bank",
+        Callback = function() 
+            Teleport(Vector3(11.033385276794, 18.327821731567, 778.54730224609));
+        end;
+    });
+
+    TeleportUI.Button({
+        Text = "Museum",
+        Callback = function() 
+            Teleport(Vector3(1059.7930908203, 101.80494689941, 1249.2574462891));
+        end;
+    });
+
+    TeleportUI.Button({
+        Text = "Jewellery Store",
+        Callback = function() 
+            Teleport(Vector3(115.15441131592, 18.263557434082, 1363.3806152344));
+        end;
+    });
+
+    TeleportUI.Button({
+        Text = "Criminal Base (Volcano)",
+        Callback = function() 
+            Teleport(Vector3(1815.5421142578, 47.260692596436, -1634.0577392578));
+        end;
+    });
+end;
+]]
 
 -- Aimbot
 local GetClosestPlayer; do 
@@ -408,15 +680,15 @@ local GetClosestPlayer; do
     });
 
     GetClosestPlayer = function() 
-        if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end;
+        if not LocalPlayer.Character or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
     
         local LPos = LocalPlayer.Character.HumanoidRootPart.Position;
         local Players = {};
     
-        for i,v in pairs(game.Players:GetChildren()) do
+        for i,v in pairs(GetChildren(game.Players)) do
             if v ~= LocalPlayer and v.TeamColor ~= LocalPlayer.TeamColor then
                 local Character = v.Character;
-                local HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart");
+                local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
                 if HumanoidRootPart then
                     local _, Visible = WorldToViewportPoint(Camera, HumanoidRootPart.Position);
                     if Visible then
@@ -427,19 +699,28 @@ local GetClosestPlayer; do
             end;
         end;
     
-        table.sort(Players, function(x,y) return x[1] < y[1] end);
+        sort(Players, function(x,y) return x[1] < y[1] end);
     
         return Players[1] and Players[1][2];
     end;
-end
+end;
 
 Vehicle.OnVehicleEntered:Connect(function(Vehicle) 
     warn("debug: entered vehicle");
 
-    for i,v in pairs(Vehicle) do
-        if rawget(VehicleConfig, i) then
+    for i,v in Pairs(Vehicle) do
+        if Rawget(VehicleConfig, i) then
             Vehicle[i] = VehicleConfig[i];
         end;
+    end;
+
+    if Flags.EmulateVehicle then
+        Vehicle.Make = Flags.EmulateVehicle;
+        Vehicle.EnumMakeId = MakeId[Flags.EmulateVehicle];
+    end;
+
+    if Flags.VehicleColor then
+        Flags.VehicleColor:SetColor(Vehicle.Model.Model.Body.Color);
     end;
 end);
 
@@ -454,8 +735,8 @@ Item.OnLocalItemEquipped:Connect(function(Item)
         InventoryUtils.setAttr(Item.inventoryItemValue, "AmmoLeft", math.huge);
     end;
 
-    for i,v in pairs(Item.Config) do
-        if rawget(GunConfig, i) then
+    for i,v in Pairs(Item.Config) do
+        if Rawget(GunConfig, i) then
             Item.Config[i] = GunConfig[i];
         end;
     end;
@@ -467,21 +748,23 @@ Item.OnLocalItemUnequipped:Connect(function()
 end);
 
 game.RunService.Stepped:Connect(function() 
-    if Flags.EjectLoop then
-        for i,v in pairs(game.Workspace.Vehicles:GetChildren()) do
-            Event:FireServer("l59h3mcg", v);
-        end;
-    end;
-
-    if Flags.Aimbot and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) and Flags.ItemEquipped then
+    if Flags.Aimbot and IsMouseButtonPressed(UserInputService, Enum.UserInputType.MouseButton2) and Flags.ItemEquipped then
         local Closest = GetClosestPlayer();
         if Closest then
             local Target = Flags.AimbotTarget or "Head";
             local _, Visible = WorldToViewportPoint(Camera, Closest.Character[Target].Position);
             if Visible then
-                Camera.CFrame = CFrame.new(Camera.CFrame.Position, Closest.Character[Target].Position);
+                Camera.CFrame = CFrame(Camera.CFrame.Position, Closest.Character[Target].Position);
                 --Camera.CFrame = CFrame(Camera.CFrame.Position, Closest[Target].Position); for first person
             end;
+        end;
+    end;
+
+    if Flags.VehicleFly then
+        local Vehicle = Vehicle.GetLocalVehiclePacket();
+        if Vehicle and Vehicle.Mass then
+            Chassis.SetGravity(Vehicle, 0);
+            Vehicle.Model.Engine.CFrame = Vehicle.Model.Engine.CFrame + Camera.CFrame.lookVector; -- Fate you will have to implement this function properly (im am not experienced with cframe manipulation)
         end;
     end;
 
@@ -506,12 +789,12 @@ game.RunService.Stepped:Connect(function()
 
     if Flags.Pickpocket then
         local Closest = GetClosestPlayer();
-        if Closest and tostring(Closest.Team) == "Police" then
-            if Flags.PickpocketRebounce - tick() < 2 then return end;
+        if Closest and Closest.Team.Name == "Police" then
+            if Flags.PickpocketRebounce and Flags.PickpocketRebounce - tick() < 2 then return end;
             local C = (Closest.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).magnitude; 
-            if C > 10 then return end;
+            if C > 15 then return end;
 
-            Event:FireServer("navdmccv", Closest.Name);
+            Event:FireServer(Keys.AttemptPickPocket, Closest.Name);
             SynapseNotification(string.format("Pickpocketed %s. Run!", Closest.Name));
             Flags.PickpocketRebounce = tick();
         end;
@@ -519,17 +802,47 @@ game.RunService.Stepped:Connect(function()
 
     if Flags.Arrest then
         local Closest = GetClosestPlayer();
-        if Closest and tostring(Closest.Team) == "Criminal" then
+        if Closest and Closest.Team.Name == "Criminal" then
             local C = (Closest.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).magnitude; 
-            if C > 10 then return end;
+            if C > 15 then return end;
 
-            Event:FireServer("rc4rrrvd", Closest.Name);
+            local EquippedItem = Equipped.getEquipped()[1];
+            if EquippedItem and Tostring(EquippedItem.obj) ~= "Handcuffs" then
+                for i,v in Pairs(Equipped.getInventoryItemsFor(LocalPlayer)) do
+                    if Tostring(v.obj) == "Handcuffs" then
+                        Equipped.toggleEquip(v);
+                        break;
+                    end;
+                end;
+            end;
+
+            Event:FireServer(Keys.AttemptArrest, Closest.Name);
+        end;
+    end;
+
+    if Flags.EjectLoop then
+        for i,v in Pairs(GetChildren(Workspace.Vehicles)) do
+            if FindFirstChild(v, "Seat") then
+                local C = (v.Seat.Position - LocalPlayer.Character.HumanoidRootPart.Position).magnitude;
+                if C > 10 then return end;
+
+                local EquippedItem = Equipped.getEquipped()[1];
+                if EquippedItem and Tostring(EquippedItem.obj) ~= "Handcuffs" then
+                    for i,v in Pairs(Equipped.getInventoryItemsFor(LocalPlayer)) do
+                        if Tostring(v.obj) == "Handcuffs" then
+                            Equipped.toggleEquip(v);
+                            break;
+                        end;
+                    end;
+                end;
+
+                Event:FireServer(Keys.AttemptVehicleEject, v);
+            end;
         end;
     end;
 end);
 
 SynapseNotification(string.format("Loaded in %ss", tick() - TNow), ToastType.Success);
-
 -- Will add more features later
 
 --Gun
