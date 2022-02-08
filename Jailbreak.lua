@@ -700,86 +700,6 @@ local GetClosestPlayer; do
     end;
 end;
 
--- Visuals 
-local ESP = {}; do 
-    local ESPConfig = {} do
-        local RDynamic  = RectDynamic
-        local PointInst = PointInstance;
-    
-        ESPConfig = {
-            Box = {
-                Thickness = 1,
-                Color = Color3.new(0.364705, 0.992156, 0.305882);
-                EnemyColor = Color3.new(0.972549, 0.266666, 0.266666);
-            },
-            Tracers = {}
-        }
-    
-        local Objects = {};
-        function ESP:AddBox(object, team) 
-            local Point1 = PointInst.new(object, CFrame(Vector3(2.5, 3, 0)));
-            Point1.RotationType = CFrameRotationType.CameraRelative
-
-            local Point2 = PointInst.new(object, CFrame(Vector3(-2.5, -3.5, 0)));
-            Point2.RotationType = CFrameRotationType.CameraRelative
-
-            local Rect = RDynamic.new(Point1, Point2);
-    
-            Rect.Thickness = ESPConfig.Box.Thickness;
-            Rect.Color = ESPConfig.Box[team and "Color" or "EnemyColor"];
-    
-            Objects[object] = { Object = Rect, Team = team };
-        end;
-    
-        function ESP:RemoveAll() 
-            for i,v in Pairs(Objects) do 
-                v.Object.Visible = false;
-            end;
-        end;
-
-        function ESP:RenderLoop() 
-            for i, v in Pairs(Objects) do
-                v.Object.Thickness = ESPConfig.Box.Thickness;
-                v.Object.Color = ESPConfig.Box[v.Team and "Color" or "EnemyColor"];
-            end;
-        end;
-    end;
-
-    local ESPUI = UI.New({
-        Title = "Visuals"
-    });
-
-    ESPUI.Toggle({
-        Text = "Box ESP",
-        Callback = function(bool) 
-            if bool then
-                for i,v in Pairs(GetChildren(game.Players)) do
-                    if v ~= LocalPlayer and v.Character and FindFirstChild(v.Character, "HumanoidRootPart") then
-                        ESP:AddBox(v.Character.HumanoidRootPart, v.TeamColor == LocalPlayer.TeamColor);
-                    end;
-                end;
-            end;
-            Flags.BoxESP = bool;
-        end;
-    });
-
-    ESPUI.ColorPicker({
-        Text = "Team Color",
-        Default = ESPConfig.Box.Color,
-        Callback = function(value) 
-            ESPConfig.Box.Color = value;
-        end;
-    });
-
-    ESPUI.ColorPicker({
-        Text = "Enemy Color",
-        Default = ESPConfig.Box.EnemyColor,
-        Callback = function(value) 
-            ESPConfig.Box.EnemyColor = value;
-        end;
-    });
-end;
-
 Vehicle.OnVehicleEntered:Connect(function(Vehicle) 
     warn("debug: entered vehicle");
 
@@ -823,10 +743,6 @@ Item.OnLocalItemUnequipped:Connect(function()
 end);
 
 game.RunService.Stepped:Connect(function() 
-    if Flags.BoxESP then
-        ESP:RenderLoop();
-    end;
-
     if Flags.Aimbot and IsMouseButtonPressed(UserInputService, Enum.UserInputType.MouseButton2) and Flags.ItemEquipped then
         local Closest = GetClosestPlayer();
         if Closest then
