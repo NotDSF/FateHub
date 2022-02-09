@@ -1,3 +1,4 @@
+local Teams = game:GetService("Teams")
 -- The types are just to help me with remembering the names
 
 type ChassisType = {
@@ -173,12 +174,6 @@ end;
 
 for i,v in pairs(Keys) do
     rconsoleinfo(string.format("Automatically grabbed %s key: %s\n", i, v));
-end;
-
-local BackupChassis = Chassis.UpdatePrePhysics;
-Chassis.UpdatePrePhysics = function(...) 
-    if Flags.VehicleChassisDisable then return end;
-    return BackupChassis(...);
 end;
 
 for i,v in pairs(Getgc(true)) do
@@ -777,7 +772,7 @@ game.RunService.Stepped:Connect(function()
                 if not Vehicle.BackupLift then
                     SynapseNotification("Ninja mode activated.");
                     Vehicle.BackupLift = Vehicle.Lift.Force;
-                    Vehicle.Lift.Force = Vector3.new(0, 999999, 0);
+                    Vehicle.Lift.Force = Vector3(0, 999999, 0);
                 end;
             elseif Vehicle.BackupLift then
                 Vehicle.Lift.Force = Vehicle.BackupLift;
