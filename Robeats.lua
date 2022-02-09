@@ -1,3 +1,9 @@
+do return end -- not done automation for when the track launches, will also add  song speed
+
+if (not game:IsLoaded()) then
+    game.Loaded:Wait();
+end
+
 local Options = {
     Perfect = .5,
     Okay = 4,
@@ -35,21 +41,9 @@ end);
 
 local Players = game:GetService("Players");
 local LocalPlayer = Players.LocalPlayer
-local WorkspaceChildren = game:GetService("Workspace"):GetChildren();
 
-local Parent;
-local Character;
-for Index = 1, #WorkspaceChildren do
-    local Child = WorkspaceChildren[Index]
-    local ChildChildren = Child:GetChildren();
-    for Index2, Child2 in pairs(ChildChildren) do
-        local Humanoid = Child2:FindFirstChild("Humanoid");
-        if (Humanoid and Humanoid.DisplayName == LocalPlayer.DisplayName) then
-            Parent = Child
-            Character = Child2
-            break;
-        end
-    end
+if (not LocalPlayer.Character) then
+    LocalPlayer.CharacterAdded:Wait();
 end
 
 local Notes = {
@@ -59,30 +53,70 @@ local Notes = {
     F = { IsHolding = false; LastPressed = tick() };
 }
 
-local Children = Parent:GetChildren();
-for Index = 1, #Children do
-    local Child = Children[Index]
-    local ChildChildren = Child:GetChildren();
-    if (#ChildChildren == 9) then
-        for Index2 = 1, #ChildChildren do
-            local ChildofChild = ChildChildren[Index2]
-            if (tostring(ChildofChild.BrickColor) == "Fire Yellow") then
-                if ((ChildofChild.Position - Character.HumanoidRootPart.Position).Magnitude <= 20) then
-                    if (not Notes.A.Position) then
-                        Notes.A.Position = ChildofChild.Position
-                    elseif (not Notes.S.Position) then
-                        Notes.S.Position = ChildofChild.Position
-                    elseif (not Notes.D.Position) then
-                        Notes.D.Position = ChildofChild.Position
-                    elseif (not Notes.F.Position) then
-                        Notes.F.Position = ChildofChild.Position
-                    else
-                        break;
+local ItemChanged;
+
+local GetNotes = function()
+    if (ItemChanged) then
+        ItemChanged:Disconnect();
+    end
+
+    for Index, Value in pairs(Notes) do
+        Notes[Index].Position = nil
+    end
+
+    local Parent, Character;
+    repeat
+        local WorkspaceChildren = game:GetService("Workspace"):GetChildren();
+        for Index = 1, #WorkspaceChildren do
+            local Child = WorkspaceChildren[Index]
+            local ChildChildren = Child:GetChildren();
+            for Index2, Child2 in pairs(ChildChildren) do
+                local Humanoid = Child2:FindFirstChild("Humanoid");
+                if (Humanoid and Humanoid.DisplayName == LocalPlayer.DisplayName) then
+                    Parent = Child
+                    Character = Child2
+                    break;
+                end
+            end
+        end
+        task.wait(.5);
+    until Parent and Character
+
+    local Children = Parent:GetChildren();
+    for Index = 1, #Children do
+        local Child = Children[Index]
+        local ChildChildren = Child:GetChildren();
+        if (#ChildChildren == 9) then
+            for Index2 = 1, #ChildChildren do
+                local ChildofChild = ChildChildren[Index2]
+                if (tostring(ChildofChild.BrickColor) == "Fire Yellow") then
+                    if ((ChildofChild.Position - Character.HumanoidRootPart.Position).Magnitude <= 20) then
+                        if (not Notes.A.Position) then
+                            Notes.A.Position = ChildofChild.Position
+                        elseif (not Notes.S.Position) then
+                            Notes.S.Position = ChildofChild.Position
+                        elseif (not Notes.D.Position) then
+                            Notes.D.Position = ChildofChild.Position
+                        elseif (not Notes.F.Position) then
+                            Notes.F.Position = ChildofChild.Position
+                        else
+                            break;
+                        end
                     end
                 end
             end
         end
     end
+
+end
+
+if (LocalPlayer.Character) then
+    LocalPlayer.CharacterRemoving:Connect(function()
+        print(true);
+        GetNotes();
+    end);
+else
+    GetNotes();
 end
 
 local keypress = function(Key)
@@ -92,7 +126,7 @@ local keyrelease = function(Key)
     keyrelease(Key);
 end
 
-_G.LOL = game.ItemChanged:Connect(function(Item, Prop)
+ItemChanged = game.ItemChanged:Connect(function(Item, Prop)
     local ClassName = Item.ClassName
     if (string.find(ClassName, "Adornment") and Prop == "CFrame") then
         local IsSphere = ClassName == "SphereHandleAdornment"
