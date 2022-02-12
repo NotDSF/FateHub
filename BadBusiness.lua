@@ -1,7 +1,7 @@
 -- not done
 local ProtectInstance = loadstring(readfile("ProtectInstance.lua"))();
 
-if (not ProtectInstance) then error("protectinstance  missing"); return end
+-- if (not ProtectInstance) then error("protectinstance  missing"); return end
 
 local Workspace = game:GetService("Workspace");
 local UserInputService = game:GetService("UserInputService");
@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 local Players = game:GetService("Players");
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse();
+local MouseVector = Vector2.new(Mouse.X, Mouse.Y + 36);
 
 local CurrentCamera = Workspace.CurrentCamera
 
@@ -19,10 +20,19 @@ local Settings = {
     FieldOfView = nil,
     FireRate = nil, --[[ 1 - 10 ]]
 
+    FovRadius = 150,
+
     Aimbot = false,
     AimlockKey = Enum.UserInputType.MouseButton2,
+    Smoothnes = 1,
+    ClosestCursor = false,
+    ClosestPlayer = false,
 
-    SilentAim = true,
+    Backtrack = false,
+    BacktrackDelay = .5,
+    ShowBacktrack = false,
+
+    SilentAim = false,
     Wallbang = false
 }
 
@@ -91,27 +101,6 @@ end
 local OldAnims = {}
 local Keys = {}
 
-UserInputService.InputEnded:Connect(function(Key, GPE)
-    local KeyString = string.split(tostring(Key.KeyCode), ".")[3]
-    if (not GPE and Keys[KeyString]) then
-        Keys[KeyString] = false
-    end
-
-    if (Settings.Aimbot and Key.KeyCode == Settings.AimlockKey and Locked) then
-        Locked = false
-    end
-end)
-UserInputService.InputBegan:Connect(function(Key, GPE)
-    local KeyString = string.split(tostring(Key.KeyCode), ".")[3]
-    if (not GPE) then
-        Keys[KeyString] = true
-    end
-
-    if (Settings.Aimbot and Key.KeyCode == Settings.AimlockKey) then
-        Locked = true
-    end
-end)
-
 local FlyCharacter = function(Camera, Root, Humanoid, Speed)
     local BodyGyro = Instance.new("BodyGyro");
     local BodyVelocity = Instance.new("BodyVelocity");
@@ -179,28 +168,76 @@ end
 
 -- Settings.NoRecoil = true
 -- Settings.InstantAimTime = true
--- Settings.FireMode = "Auto"
+-- -- Settings.FireMode = "Auto"
 -- UpdateWeaponSettings();
 -- SetFOV(180);
+-- Settings.FovRadius = 200
+-- Settings.Aimbot = true
+-- Settings.SilentAim = true
+-- Settings.Wallbang = true
 
 -- wait(5);
 -- FlyCharacter(nil, Network.Characters:GetCharacter(LocalPlayer).Root, nil, 10);
 
+Settings.Backtrack = true
+Settings.ClosestCursor = true
 
 local FOV = Drawing.new("Circle");
 FOV.Color = Color3.fromRGB(255, 255, 255);
 FOV.Thickness = 1
 FOV.Transparency = 1
 FOV.Filled = false
-FOV.Radius = 150
-FOV.Position = Vector2.new(Mouse.X, Mouse.Y + 36);
+FOV.Radius = Settings.FovRadius
+FOV.Position = MouseVector
 FOV.Visible = true
+
+local SnapLine = Drawing.new("Line");
+SnapLine.Color = Color3.fromRGB(255, 255, 255);
+SnapLine.Thickness = .1
+SnapLine.Transparency = 1
+SnapLine.From = MouseVector
 
 local Characters = {}
 local Teams = {}
+local Trackers = {}
+
+local HandleTracking = function(Player, Character)
+    Trackers[Character] = {}
+    local T = tick();
+    while true do
+        local Now = tick();
+        if ((Now - T) > Settings.BacktrackDelay) then
+            for Index, Tracker in pairs(Trackers[Character]) do
+                Tracker:Destroy();
+            end
+            table.clear(Trackers[Character]);
+            T = Now
+        end
+
+        local Root = Character:FindFirstChild("Root");
+        if (Root) then
+            local Cloned = Instance.new("Part");
+            Cloned.CFrame = Root.CFrame
+            Cloned.Anchored = true
+            Cloned.CanCollide = false
+            Cloned.Transparency = Settings.ShowBacktrack and .4 or 1
+            Cloned.Size = Vector3.new(1.6, 4, 1.2);
+            Cloned.Parent = Workspace
+            table.insert(Trackers[Character], Cloned)
+        end
+        task.wait();
+    end
+end
+
+local IsEnemy = function(Player)
+    return Teams[LocalPlayer] ~= Teams[Player]
+end
 
 for Index, Player in pairs(Players:GetPlayers()) do
-    local Character = Network.Characters:GetCharacter(Network.Characters, Player);
+    local Team = Network.Teams:GetPlayerTeam(Player);
+    Teams[Player] = Team
+
+    local Character = Network.Characters:GetCharacter(Player);
     if (Character) then
         Characters[Player] = Character
         local Destroying;
@@ -208,52 +245,94 @@ for Index, Player in pairs(Players:GetPlayers()) do
             Characters[Player] = nil
             Destroying:Disconnect();
         end)
+        Character:WaitForChild("Root");
+        if (IsEnemy(Player)) then
+            task.spawn(HandleTracking, Player, Character);
+        end
     end
-
-    local Team = Network.Teams:GetPlayerTeam(Player);
-    Teams[Player] = Team
 end
 Network.Characters.CharacterAdded:Connect(function(Player, Character)
     Characters[Player] = Character
+    Character:WaitForChild("Root");
+    if (IsEnemy(Player)) then
+        HandleTracking(Player, Character);
+    end
 end)
 Network.Teams.TeamChanged:Connect(function(Player, Team)
     Teams[Player] = Team
 end)
 
 local GetClosestPlayerVec2 = function()
-    local Closest = table.create(2);
+    local Closest = table.create(3);
     local Vector2Distance = math.huge
+    local Vector3Distance = math.huge
 
-    local MouseVector = Vector2.new(Mouse.X, Mouse.Y);
+    local LocalRoot = Characters[LocalPlayer] and Characters[LocalPlayer]:FindFirstChild("Root");
     for Player, Character in pairs(Characters) do
         local CharacterRoot = Character:FindFirstChild("Root");
-        if (CharacterRoot) then
-            local Tuple, Visible = CurrentCamera:WorldToScreenPoint(CharacterRoot.Position);
-            local Vector2Magnitude = (MouseVector - Vector2.new(Tuple.X, Tuple.Y)).Magnitude;
-            if (Visible and Vector2Magnitude <= Vector2Distance and Vector2Magnitude <= FOV.Radius) then
+        if (Player ~= LocalPlayer and LocalRoot and CharacterRoot and IsEnemy(Player) and Character.Health.Value > 0) then
+            local Position = Character.Body.Head.Position
+            local Tuple, Visible = CurrentCamera:WorldToViewportPoint(Position);
+            local CharacterVector = Vector2.new(Tuple.X, Tuple.Y);
+            local Vector2Magnitude = (MouseVector - CharacterVector).Magnitude;
+            if (Visible and Vector2Magnitude <= Vector2Distance and Vector2Magnitude <= FOV.Radius and Settings.ClosestCursor) then
                 Vector2Distance = Vector2Magnitude
-                Closest = {Character, Player}
+                Closest = {Character, CharacterVector, Player}
+            end
+
+            local Vector3Magnitude = (Position - LocalRoot.Position).Magnitude
+            if (Visible and Vector3Magnitude <= Vector3Distance and Vector2Magnitude <= FOV.Radius and Settings.ClosestPlayer) then
+                Vector3Distance = Vector3Magnitude
+                Closest = {Character, CharacterVector, Player}
             end
         end
+
     end
-    return Closest[1], Closest[2]
+    return unpack(Closest);
 end
 
 
-local IsEnemy = function(Player)
-    return Teams[LocalPlayer] ~= Teams[Player]
-end
+UserInputService.InputEnded:Connect(function(Key, GPE)
+    local KeyString = string.split(tostring(Key.KeyCode), ".")[3]
+    if (not GPE and Keys[KeyString]) then
+        Keys[KeyString] = false
+    end
 
+    if (Settings.Aimbot and Key.UserInputType == Settings.AimlockKey and Locked) then
+        Locked = false
+    end
+end)
+
+
+UserInputService.InputBegan:Connect(function(Key, GPE)
+    local KeyString = string.split(tostring(Key.KeyCode), ".")[3]
+    if (not GPE) then
+        Keys[KeyString] = true
+    end
+
+    if (Settings.Aimbot and Key.UserInputType == Settings.AimlockKey) then
+        Locked = true
+    end
+end)
 
 RunService.RenderStepped:Connect(function()
-    FOV.Position = Vector2.new(Mouse.X, Mouse.Y + 36);
+    MouseVector = Vector2.new(Mouse.X, Mouse.Y + 36);
+
+    FOV.Position = MouseVector
+    SnapLine.From = MouseVector
+    local ClosestCharacter, Vector, Player = GetClosestPlayerVec2();
 
     if (Locked) then
-        local ClosestCharacter, Player = GetClosestPlayerVec2();
-        if (ClosestCharacter and Player and IsEnemy(Player)) then
-            local Root = ClosestCharacter.Root
-            CurrentCamera.CFrame = Root.CFrame
+        if (ClosestCharacter and Player) then
+            mousemoverel((Vector.X - MouseVector.X) / Settings.Smoothnes, (Vector.Y - MouseVector.Y) / Settings.Smoothnes);
         end
+    end
+
+    if (Vector) then
+        SnapLine.To = Vector
+        SnapLine.Visible = true
+    else
+        SnapLine.Visible = false
     end
 end)
 
@@ -262,16 +341,39 @@ debug.setupvalue(Network.Projectiles.KillProjectile, 1, true);
 local OldInitProjectile = Network.Projectiles.InitProjectile
 Network.Projectiles.InitProjectile = function(...)
     local Args = {...}
-    if (Settings.SilentAim and Args[5] == LocalPlayer) then
-        local ClosestCharacter, Player = GetClosestPlayerVec2();
-        if (ClosestCharacter and Player and IsEnemy(Player)) then
+    if (Settings.SilentAim or Settings.Backtrack and Args[5] == LocalPlayer) then
+        local ClosestCharacter, Vector, Player = GetClosestPlayerVec2();
+        if (ClosestCharacter and Player) then
             local CharacterRoot = ClosestCharacter.Root
             local Viewable = CurrentCamera:GetPartsObscuringTarget({CurrentCamera.CFrame.Position, CharacterRoot.CFrame.Position}, {Characters[LocalPlayer], ClosestCharacter});
-            if (#Viewable == 0 or Settings.Wallbang) then
+            if (Settings.SilentAim and #Viewable == 0 or Settings.Wallbang) then
                 Args[3] = (CharacterRoot.CFrame.Position + (Vector3.new(math.random(1, 10), math.random(1, 10), math.random(1, 10)) / 10)) - Args[4]
                 return OldInitProjectile(unpack(Args));
             end
         end
+
+        if (Settings.Backtrack) then
+            local UnitRay = Mouse.UnitRay
+            local LocalCharacter = Characters[LocalPlayer]
+            local IgnoreList = {LocalCharacter}
+            local EquippedWeapon = LocalCharacter.Backpack.Equipped.Value
+            for Index, Child in pairs(Workspace:GetChildren()) do
+                if (Child.Name == EquippedWeapon.Name) then
+                    table.insert(IgnoreList, Child);
+                end
+            end
+            local Part = Workspace:FindPartOnRayWithIgnoreList(Ray.new(UnitRay.Origin, UnitRay.Direction * 1000), IgnoreList);
+
+            for Character, CharacterTrackers in pairs(Trackers) do
+                local DoBackTrack = table.find(CharacterTrackers, Part);
+                if (DoBackTrack) then
+                    print(true);
+                    Args[3] = (Character.Root.CFrame.Position + (Vector3.new(math.random(1, 10), math.random(1, 10), math.random(1, 10)) / 10)) - Args[4]
+                    return OldInitProjectile(unpack(Args)); 
+                end
+            end
+        end
+
     end
     return OldInitProjectile(...);
 end
