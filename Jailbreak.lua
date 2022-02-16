@@ -1,4 +1,3 @@
-local Teams = game:GetService("Teams")
 -- The types are just to help me with remembering the names
 
 type ChassisType = {
@@ -129,23 +128,28 @@ local Item = GetLocal("OnLocalItemEquipped");
 local Equipped = GetLocal("addEquipCondition");
 local InventoryUtils = GetLocal("getAttr");
 local Chassis: ChassisType = GetLocal("SetGravity");
+local Paraglide = GetLocal("IsFlying");
+local IsSkydiving = GetFunction("IsSkydiving");
 local InternalFunctions = GetLocal("hems");
-local MakeId = require(game.ReplicatedStorage.Game.Garage.EnumMake);
-local LocalPlayer = game.Players.LocalPlayer;
-local UserInputService = game.UserInputService;
-local TweenService = game.TweenService;
-local Workspace = game.Workspace;
+local Game = game;
+local LocalPlayer = Game.Players.LocalPlayer;
+local ReplicatedStorage = Game.ReplicatedStorage;
+local UserInputService = Game.UserInputService;
+local TweenService = Game.TweenService;
+local Workspace = Game.Workspace;
 local Camera = Workspace.CurrentCamera;
 local WorldToViewportPoint = Camera.WorldToViewportPoint;
 local IsMouseButtonPressed = UserInputService.IsMouseButtonPressed;
-local GetChildren = game.GetChildren;
-local FindFirstChild = game.FindFirstChild;
+local GetChildren = Game.GetChildren;
+local FindFirstChild = Game.FindFirstChild;
+local MakeId = require(ReplicatedStorage.Game.Garage.EnumMake);
 local CFrame = CFrame.new;
 local Vector3 = Vector3.new;
 local sort = table.sort;
 local getupvalue = debug.getupvalue;
-local setupvalue = debug.setupvalue;
+local setupvalue = debug.setupvalue; 
 local Tostring = tostring;
+local Checkcaller = checkcaller;
 local BackupIndex, BackupNewIndex;
 
 local Keys = {};
@@ -177,12 +181,13 @@ for i,v in pairs(Keys) do
 end;
 
 for i,v in pairs(Getgc(true)) do
-    if Type(v) == "function" and debug.getinfo(v).name == "CheatCheck" then
+    if Type(v) == "function" and info(v, "n") == "CheatCheck" then
+        rconsoleinfo("Disabled anti cheat!\n");
         hookfunction(v, function() end);
     end;
 end;
 
-BackupIndex = hookmetamethod(game, "__index", newcclosure(function(self, idx) 
+BackupIndex = hookmetamethod(Game, "__index", newcclosure(function(self, idx) 
     if idx == "WalkSpeed" then
         return 15;
     elseif idx == "JumpPower" then
@@ -191,8 +196,8 @@ BackupIndex = hookmetamethod(game, "__index", newcclosure(function(self, idx)
     return BackupIndex(self, idx);
 end));
 
-BackupNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(self, idx, val) 
-    if not checkcaller() and Flags[idx] then
+BackupNewIndex = hookmetamethod(Game, "__newindex", newcclosure(function(self, idx, val) 
+    if not Checkcaller() and Flags[idx] then
         val = val + Flags[idx];
     end;
     return BackupNewIndex(self, idx, val);
@@ -251,19 +256,12 @@ do
         Callback = function(bool)
             local Packet = Vehicle.GetLocalVehiclePacket();
             if Flags.VehicleFly and Packet and Packet.Mass then
-                Chassis.SetGravity(Packet, 20);
+                Chassis.SetGravity(Packet, 60);
             end;
             if Packet and not Packet.Mass and bool then
                 SynapseNotification("Your current vehicle is not supported.\nIf you enter a supported vehicle then vehicle fly will automatically be applied.", ToastType.Error);
             end;
             Flags.VehicleFly = bool;
-        end;
-    });
-
-    VehiclePage.Toggle({
-        Text = "Ninja",
-        Callback = function(bool) 
-            Flags.Ninja = bool;
         end;
     });
 
@@ -279,20 +277,6 @@ do
             end;
             --VehicleConfig.Lift.Force = Vector3.new(0, VehicleConfig.Lift.Force.Y * value, 0);
         end;
-    });
-
-    VehiclePage.Slider({
-        Text = "Vehicle Bounce",
-        Min = 0,
-        Max = 100,
-        Def = 100,
-        Callback = function(value) 
-            local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet then
-                Packet.Bounce = value;
-            end;
-            VehicleConfig.Bounce = value;
-        end
     });
 
     VehiclePage.Slider({
@@ -380,7 +364,7 @@ do
     });
 
     local Vehicles = {};
-    for i,v in pairs(require(game.ReplicatedStorage.Game.Garage.VehicleData)) do
+    for i,v in Pairs(require(ReplicatedStorage.Game.Garage.VehicleData)) do
         Vehicles[i] = v.Make;
     end;
     sort(Vehicles);
@@ -419,19 +403,6 @@ end;
 do 
     local GunPage = UI.New({
         Title = "Combat"
-    });
-
-    GunPage.Slider({
-        Text = "FireRate Multiplier",
-        Min = 2,
-        Max = 100,
-        Def = 2,
-        Callback = function(value) 
-            if __equiped and __equiped.Config then
-                __equiped.Config.FireFreq = __equiped.Config.FireFreq * value;
-            end;
-            GunConfig.FireFreq = (GunConfig.FireFreq or 5) * value;
-        end;
     });
 
     GunPage.Toggle({
@@ -504,7 +475,7 @@ do
     Misc.Button({
         Text = "Remove Lasers",
         Callback = function() 
-            for i,v in Pairs(game.Workspace:GetDescendants()) do
+            for i,v in Pairs(Game.Workspace:GetDescendants()) do
                 if v.Name == "Lasers" then
                     v:Destroy();
                 end;
@@ -537,6 +508,14 @@ do
     });
 
     Misc.Toggle({
+        Text = "Auto Parachute",
+        Callback = function(bool) 
+            Flags.AutoParachute = bool;
+        end,
+        Enabled = false
+    });
+
+    Misc.Toggle({
         Text = "No Cooldown",
         Callback = function(bool) 
             for i,v in Pairs(Getgc(true)) do
@@ -554,7 +533,7 @@ do
     Misc.Button({
         Text = "Rejoin",
         Callback = function() 
-            game.TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId);
+            Game.TeleportService:TeleportToPlaceInstance(Game.PlaceId, Game.JobId);
         end
     });
 end;
@@ -604,51 +583,44 @@ do
 end;
 
 -- Teleport 
---[[
-    do 
+do 
     local TeleportUI = UI.New({
         Title = "Teleports"
     });
 
-    local function Teleport(Pos) 
-        local TimeRequired = 80 + math.floor((LocalPlayer.Character.HumanoidRootPart.Position - Pos).magnitude / 100);
-        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame(LocalPlayer.Character.HumanoidRootPart.Position.X, 2000, LocalPlayer.Character.HumanoidRootPart.Position.Z);
-        local Tween = TweenService.Create(TweenService, LocalPlayer.Character.HumanoidRootPart, TweenInfo.new(TimeRequired), {CFrame=CFrame(Vector3(Pos.X, 2000, Pos.Z))});
+    local function Teleport(Pos)
+        local HumanoidRootPart = LocalPlayer.Character.HumanoidRootPart;
+        local Params = RaycastParams.new();
+        Params.FilterDescendantsInstances = { LocalPlayer.Character };
+
+        if Game.Workspace:Raycast(HumanoidRootPart.Position, Vector3(0, 500, 0), Params) then
+            return SynapseNotification("Please go outside before teleporting!", ToastType.Error);
+        elseif Vehicle.GetLocalVehiclePacket() then
+            return SynapseNotification("Please exit your vehicle before teleporting!", ToastType.Error); 
+        end;
+
+        local TimeRequired = 80 + math.floor((HumanoidRootPart.Position - Pos).magnitude / 100);
+        HumanoidRootPart.CFrame = CFrame(HumanoidRootPart.Position.X, 2000, HumanoidRootPart.Position.Z);
+        local Tween = TweenService.Create(TweenService, HumanoidRootPart, TweenInfo.new(TimeRequired), {CFrame=CFrame(Vector3(Pos.X, 2000, Pos.Z))});
         Tween:Play();
         SynapseNotification(string.format("Teleport in progress...\nUnfortunately due to security reasons this will take %ds.", TimeRequired));
+        Flags.Teleporting = true;
         Tween.Completed:Wait();
-        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame(LocalPlayer.Character.HumanoidRootPart.Position.X, Pos.Y + 10, LocalPlayer.Character.HumanoidRootPart.Position.Z);
+        Flags.Teleporting = false;
+        HumanoidRootPart.CFrame = CFrame(HumanoidRootPart.Position.X, Pos.Y + 10, HumanoidRootPart.Position.Z);
     end;
 
-    TeleportUI.Button({
-        Text = "Bank",
-        Callback = function() 
-            Teleport(Vector3(11.033385276794, 18.327821731567, 778.54730224609));
-        end;
-    });
-
-    TeleportUI.Button({
-        Text = "Museum",
-        Callback = function() 
-            Teleport(Vector3(1059.7930908203, 101.80494689941, 1249.2574462891));
-        end;
-    });
-
-    TeleportUI.Button({
-        Text = "Jewellery Store",
-        Callback = function() 
-            Teleport(Vector3(115.15441131592, 18.263557434082, 1363.3806152344));
-        end;
-    });
-
-    TeleportUI.Button({
-        Text = "Criminal Base (Volcano)",
-        Callback = function() 
-            Teleport(Vector3(1815.5421142578, 47.260692596436, -1634.0577392578));
-        end;
-    });
+    TeleportUI.Button({ Text = "Bank", Callback = function() Teleport(Vector3(11.033385276794, 18.327821731567, 778.54730224609)); end; });
+    TeleportUI.Button({ Text = "Museum", Callback = function() Teleport(Vector3(1059.7930908203, 101.80494689941, 1249.2574462891)); end; });
+    TeleportUI.Button({ Text = "Jewellery Store", Callback = function() Teleport(Vector3(115.15441131592, 18.263557434082, 1363.3806152344)); end; });
+    TeleportUI.Button({ Text = "Criminal Base (Volcano)", Callback = function() Teleport(Vector3(1815.5421142578, 47.260692596436, -1634.0577392578)); end; });
+    TeleportUI.Button({ Text = "Criminal Base (Downtown)", Callback = function() Teleport(Vector3(-241.9779510498, 18.263689041138, 1614.1091308594)); end; });
+    TeleportUI.Button({ Text = "Police Station (Inner City)", Callback = function() Teleport(Vector3(177.87417602539, 18.581577301025, 1091.3991699219)); end; });
+    TeleportUI.Button({ Text = "Police Station (City Outskirts)", Callback = function() Teleport(Vector3(720.49090576172, 38.615474700928, 1066.9827880859)); end; });
+    TeleportUI.Button({ Text = "Prision Entrance", Callback = function() Teleport(Vector3(-1153.9276123047, 18.398023605347, -1431.1813964844)); end; });
+    TeleportUI.Button({ Text = "Gas Station", Callback = function() Teleport(Vector3(-1558.5793457031, 18.396139144897, 665.70147705078)); end; });
+    TeleportUI.Button({ Text = "Donut Shop", Callback = function() Teleport(Vector3(161.52265930176, 19.215852737427, -1597.4591064453)); end; });
 end;
-]]
 
 -- Aimbot
 local GetClosestPlayer; do 
@@ -680,7 +652,7 @@ local GetClosestPlayer; do
         local LPos = LocalPlayer.Character.HumanoidRootPart.Position;
         local Players = {};
     
-        for i,v in pairs(GetChildren(game.Players)) do
+        for i,v in pairs(GetChildren(Game.Players)) do
             if v ~= LocalPlayer and v.TeamColor ~= LocalPlayer.TeamColor then
                 local Character = v.Character;
                 local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
@@ -742,7 +714,7 @@ Item.OnLocalItemUnequipped:Connect(function()
     Flags.ItemEquipped = false;
 end);
 
-game.RunService.Stepped:Connect(function() 
+Game.RunService.RenderStepped:Connect(function() 
     if Flags.Aimbot and IsMouseButtonPressed(UserInputService, Enum.UserInputType.MouseButton2) and Flags.ItemEquipped then
         local Closest = GetClosestPlayer();
         if Closest then
@@ -752,6 +724,12 @@ game.RunService.Stepped:Connect(function()
                 Camera.CFrame = CFrame(Camera.CFrame.Position, Closest.Character[Target].Position);
                 --Camera.CFrame = CFrame(Camera.CFrame.Position, Closest[Target].Position); for first person
             end;
+        end;
+    end;
+
+    if Flags.Teleporting or Flags.AutoParachute then
+        if IsSkydiving() then
+            Paraglide.Parachute();
         end;
     end;
 
@@ -802,7 +780,7 @@ game.RunService.Stepped:Connect(function()
             if C > 15 then return end;
 
             local EquippedItem = Equipped.getEquipped()[1];
-            if EquippedItem and Tostring(EquippedItem.obj) ~= "Handcuffs" then
+            if EquippedItem and Tostring(EquippedItem.obj) ~= "Handcuffs" or Tostring(EquippedItem.obj) ~= "Cuffed" then
                 for i,v in Pairs(Equipped.getInventoryItemsFor(LocalPlayer)) do
                     if Tostring(v.obj) == "Handcuffs" then
                         Equipped.toggleEquip(v);
@@ -822,7 +800,7 @@ game.RunService.Stepped:Connect(function()
                 if C > 10 then return end;
 
                 local EquippedItem = Equipped.getEquipped()[1];
-                if EquippedItem and Tostring(EquippedItem.obj) ~= "Handcuffs" then
+                if EquippedItem and Tostring(EquippedItem.obj) ~= "Handcuffs" or Tostring(EquippedItem.obj) ~= "Cuffed" then
                     for i,v in Pairs(Equipped.getInventoryItemsFor(LocalPlayer)) do
                         if Tostring(v.obj) == "Handcuffs" then
                             Equipped.toggleEquip(v);

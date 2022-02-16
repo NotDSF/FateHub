@@ -1,0 +1,217 @@
+if getgenv().FatesHub then error("Fates Hub already loaded!"); end;
+getgenv().FatesHub = true;
+
+ToastType = ToastType or {};
+
+local TNow = tick();
+local Lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kinlei/MaterialLua/master/Module.lua"))();
+local UI = Lib.Load({
+    Title = "Fates Hub",
+    Style = 1,
+    SizeX = 500,
+    SizeY = 600,
+    Theme = "Dark"
+});
+
+local Rawget = rawget;
+local Type = typeof;
+local Getgc = getgc;
+local Pairs = pairs;
+local ToastNotif = syn.toast_notification;
+local Game = game;
+local LocalPlayer = Game.Players.LocalPlayer;
+local UserInputService = Game.UserInputService;
+local Workspace = Game.Workspace;
+local Camera = Workspace.CurrentCamera;
+local WorldToViewportPoint = Camera.WorldToViewportPoint;
+local IsMouseButtonPressed = UserInputService.IsMouseButtonPressed;
+local GetChildren = Game.GetChildren;
+local FindFirstChild = Game.FindFirstChild;
+local CFrame = CFrame.new;
+local sort = table.sort;
+local Checkcaller = checkcaller;
+local Flags = {};
+local BackupIndex, BackupNewIndex;
+
+local function GetLocal(index) 
+    for i,v in Pairs(Getgc(true)) do
+        if Type(v) == "table" and Rawget(v, index) then
+            return v;
+        end;
+    end;
+end;
+
+local function SynapseNotification(Content, Type) 
+    if not ToastNotif then return warn(Content); end;
+    ToastNotif({
+        Type = Type or ToastType.Info,
+        Duration = 7.5,
+        Title = "Fates Hub v1.0.0",
+        Content = Content
+    });
+end;
+
+SynapseNotification("ALERT: You are running a beta version of Fates Hub.\nPlease report any bugs to the discord server.\nIf you aren't you should use an alt.");
+
+BackupIndex = hookmetamethod(Game, "__index", newcclosure(function(self, idx) 
+    if idx == "WalkSpeed" then
+        return 16;
+    elseif idx == "JumpPower" then
+        return 50;
+    end;
+    return BackupIndex(self, idx);
+end));
+
+BackupNewIndex = hookmetamethod(Game, "__newindex", newcclosure(function(self, idx, val) 
+    if not Checkcaller() and Flags[idx] then
+        val = val + Flags[idx];
+    end;
+    return BackupNewIndex(self, idx, val);
+end));
+
+local Variables = GetLocal("primarystored");
+
+-- Player
+do 
+    local Player = UI.New({
+        Title = "Player"
+    });
+
+    Player.Slider({
+        Text = "WalkSpeed",
+        Min = 1,
+        Def = 16,
+        Max = 200,
+        Callback = function(value) 
+            LocalPlayer.Character.Humanoid.WalkSpeed = value;
+            Flags.WalkSpeed = value;
+        end
+    });
+
+    Player.Slider({
+        Text = "JumpPower",
+        Min = 1,
+        Def = 50,
+        Max = 200,
+        Callback = function(value) 
+            LocalPlayer.Character.Humanoid.JumpPower = value;
+            Flags.JumpPower = value;
+        end;
+    });
+end;
+
+-- Combat
+do 
+    local Combat = UI.New({
+        Title = "Combat"
+    });
+
+    Combat.Toggle({
+        Text = "Infinite Ammo",
+        Callback = function(bool) 
+            Flags.InfAmmo = bool;
+        end,
+        Enabled = false
+    });
+
+    Combat.Toggle({
+        Text = "WallBang",
+        Callback = function(bool) 
+            Flags.Wallbang = bool
+        end;
+    });
+end;
+
+-- Aimbot
+local GetClosestPlayer; do 
+    local Aimbot = UI.New({
+        Title = "Aimbot"
+    });
+
+    Aimbot.Toggle({
+        Text = "Enabled",
+        Callback = function(bool) 
+            Flags.Aimbot = bool;
+        end
+    });
+
+    Aimbot.Toggle({
+        Text = "Team Check",
+        Callback = function(bool) 
+            Flags.TeamCheck = bool;
+        end
+    })
+
+    Aimbot.Dropdown({
+        Text = "Target Part",
+        Callback = function(value) 
+            Flags.AimbotTarget = value;
+        end,
+        Options = {
+            "Head",
+            "HumanoidRootPart"
+        }
+    });
+
+    GetClosestPlayer = function() 
+        if not LocalPlayer.Character or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
+    
+        local LPos = LocalPlayer.Character.HumanoidRootPart.Position;
+        local Players = {};
+    
+        for i,v in pairs(GetChildren(Game.Players)) do
+            if v ~= LocalPlayer then
+                if Flags.TeamCheck and v.TeamColor == LocalPlayer.TeamColor then 
+                    continue;
+                end;
+
+                local Character = v.Character;
+                local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
+                if HumanoidRootPart then
+                    local _, Visible = WorldToViewportPoint(Camera, HumanoidRootPart.Position);
+                    if Visible then
+                        local Between = (HumanoidRootPart.Position - LPos).magnitude;
+                        Players[#Players+1] = {Between, v};
+                    end;
+                end;
+            end;
+        end;
+    
+        sort(Players, function(x,y) return x[1] < y[1] end);
+    
+        return Players[1] and Players[1][2];
+    end;
+end;
+
+local Backup;
+Backup = hookfunction(game.Workspace.FindPartOnRayWithIgnoreList, newcclosure(function(self, ...) 
+    if Flags.Wallbang then
+        local Closest = GetClosestPlayer();
+        if Closest then
+            local Character = Closest.Character;
+            return Character.Head, Character.Head.Position, Character.Head.Material;
+        end;
+    end;
+    return Backup(self, ...);
+end));
+
+game.RunService.RenderStepped:Connect(function() 
+    if Flags.Aimbot and IsMouseButtonPressed(UserInputService, Enum.UserInputType.MouseButton2) then
+        local Closest = GetClosestPlayer();
+        if Closest then
+            local Target = Flags.AimbotTarget or "Head";
+            local _, Visible = WorldToViewportPoint(Camera, Closest.Character[Target].Position);
+            if Visible then
+                Camera.CFrame = CFrame(Camera.CFrame.Position, Closest.Character[Target].Position);
+                --Camera.CFrame = CFrame(Camera.CFrame.Position, Closest[Target].Position); for first person
+            end;
+        end;
+    end;
+
+    if Flags.InfAmmo then
+        Variables.primarystored.Value = 100;
+        Variables.ammocount.Value = 100;
+    end;
+end);
+
+SynapseNotification(string.format("Loaded in %ss", tick() - TNow), ToastType.Success);
