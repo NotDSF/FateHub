@@ -1,3 +1,4 @@
+
 if getgenv().FatesHub then error("Fates Hub already loaded!"); end;
 getgenv().FatesHub = true;
 
@@ -70,6 +71,7 @@ BackupNewIndex = hookmetamethod(Game, "__newindex", newcclosure(function(self, i
 end));
 
 local Variables = GetLocal("primarystored");
+local Weapon = GetLocal("firebullet");
 
 -- Player
 do 
@@ -115,9 +117,9 @@ do
     });
 
     Combat.Toggle({
-        Text = "WallBang",
+        Text = "Trigger Bot",
         Callback = function(bool) 
-            Flags.Wallbang = bool
+            Flags.Triggerbot = bool
         end;
     });
 end;
@@ -183,17 +185,7 @@ local GetClosestPlayer; do
     end;
 end;
 
-local Backup;
-Backup = hookfunction(game.Workspace.FindPartOnRayWithIgnoreList, newcclosure(function(self, ...) 
-    if Flags.Wallbang then
-        local Closest = GetClosestPlayer();
-        if Closest then
-            local Character = Closest.Character;
-            return Character.Head, Character.Head.Position, Character.Head.Material;
-        end;
-    end;
-    return Backup(self, ...);
-end));
+local Mouse = LocalPlayer:GetMouse();
 
 game.RunService.RenderStepped:Connect(function() 
     if Flags.Aimbot and IsMouseButtonPressed(UserInputService, Enum.UserInputType.MouseButton2) then
@@ -211,6 +203,17 @@ game.RunService.RenderStepped:Connect(function()
     if Flags.InfAmmo then
         Variables.primarystored.Value = 100;
         Variables.ammocount.Value = 100;
+    end;
+
+    if Flags.Triggerbot then
+        if not Mouse.Target or not Mouse.Target.Parent then return end;
+
+        local Parent = Mouse.Target.Parent;
+        local Player = FindFirstChild(Game.Players, Parent.Name);
+        if not Player or Player == LocalPlayer then return end;
+        if Flags.TeamCheck and Player.TeamColor == LocalPlayer.TeamColor then return end;
+        
+        Weapon.firebullet();
     end;
 end);
 
