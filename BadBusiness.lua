@@ -3,6 +3,8 @@ local ProtectInstance = loadstring(readfile("ProtectInstance.lua"))();
 
 -- if (not ProtectInstance) then error("protectinstance  missing"); return end
 
+local wait = task.wait
+
 local Workspace = game:GetService("Workspace");
 local UserInputService = game:GetService("UserInputService");
 local RunService = game:GetService("RunService")
@@ -25,12 +27,18 @@ local Settings = {
     Aimbot = false,
     AimlockKey = Enum.UserInputType.MouseButton2,
     Smoothnes = 1,
+
+    Redirect = "Head",
+
     ClosestCursor = false,
     ClosestPlayer = false,
 
     Backtrack = false,
-    BacktrackDelay = .5,
+    BacktrackMS = 500,
     ShowBacktrack = false,
+
+    Triggerbot = false,
+    TriggerbotMS = 0,
 
     SilentAim = false,
     Wallbang = false
@@ -58,48 +66,58 @@ local filtergc = filtergc or function(Type, Args)
     return Results
 end
 
-local Network = filtergc("table", {
+local TS = filtergc("table", {
     Keys = { "Characters", "Teams" }
 })[1];
+local Network = TS.Network
 
 local WeaponConfigDefault = filtergc("table", {
     Keys = { "Controller", "Animators", "Model", "Slot", "Category" }
 });
 
+local Characters = {}
+local Teams = {}
+local Trackers = {}
+local Keys = {}
+local OldAnims = {}
+
+
 local UpdateWeaponSettings = function()
+    local Items = Characters[LocalPlayer]:WaitForChild("Backpack"):WaitForChild("Items");
+
     for Index, Value in pairs(WeaponConfigDefault) do
-        local Recoil = Value.Recoil
-        if (Settings.NoRecoil and Recoil and type(Recoil) == 'table') then
-            local RecoilSettings = Recoil.Default
-            if (RecoilSettings) then
-                RecoilSettings.RecoilMovement =  Vector2.new(1, 1);
-                RecoilSettings.CameraRotationVariance = Vector3.new(1, 1);
-                RecoilSettings.RecoilMovementVariance = Vector2.new(1, 1);
-                RecoilSettings.RecoilRecenterTime = 0
-                RecoilSettings.RecoilMovementTime = 0
-                RecoilSettings.RecoilCrouchScale = 0
-                RecoilSettings.RecoileProneScale = 0
+        if (Items:FindFirstChild(Value.Model)) then
+            local Recoil = Value.Recoil
+            if (Settings.NoRecoil and Recoil and type(Recoil) == 'table') then
+                local RecoilSettings = Recoil.Default
+                if (RecoilSettings) then
+                    RecoilSettings.RecoilMovement =  Vector2.new(1, 1);
+                    RecoilSettings.CameraRotationVariance = Vector3.new(1, 1);
+                    RecoilSettings.RecoilMovementVariance = Vector2.new(1, 1);
+                    RecoilSettings.RecoilRecenterTime = 0
+                    RecoilSettings.RecoilMovementTime = 0
+                    RecoilSettings.RecoilCrouchScale = 0
+                    RecoilSettings.RecoileProneScale = 0
+                end
             end
-        end
-        local Aim = Value.Aim
-        if (Settings.InstantAimTime and Aim and type(Aim) == 'number') then
-            if (type(Aim.AimTime) == 'number') then
-                Aim.AimTime = 0
+            local Aim = Value.Aim
+            if (Settings.InstantAimTime and Aim and type(Aim) == 'number') then
+                if (type(Aim.AimTime) == 'number') then
+                    Aim.AimTime = 0
+                    print(true, Value.Model);
+                end
             end
-        end
-        local FireModeList = Value.FireModeList
-        if (Settings.FireMode and type(FireModeList) == 'table') then
-            Value.FireModeList = {Settings.FireMode}
+            local FireModeList = Value.FireModeList
+            if (Settings.FireMode and type(FireModeList) == 'table') then
+                Value.FireModeList = {Settings.FireMode}
+            end
         end
     end
 end
 
 local SetFOV = function(FOV)
-    Network.Camera.FieldOfView = math.clamp(FOV or 90 --[[Default is 90]], 45, 270);
+    TS.Camera.FieldOfView = math.clamp(FOV or 90 --[[Default is 90]], 45, 270);
 end
-
-local OldAnims = {}
-local Keys = {}
 
 local FlyCharacter = function(Camera, Root, Humanoid, Speed)
     local BodyGyro = Instance.new("BodyGyro");
@@ -146,7 +164,6 @@ local FlyCharacter = function(Camera, Root, Humanoid, Speed)
     end
 
     local Table1 = { W = 0; A = 0; S = 0; D = 0 }
-    local wait = task.wait
     Camera = Camera or CurrentCamera
     Speed = math.clamp(Speed or 3, 1, 9);
     task.spawn(function()
@@ -166,22 +183,6 @@ local FlyCharacter = function(Camera, Root, Humanoid, Speed)
     end);
 end
 
--- Settings.NoRecoil = true
--- Settings.InstantAimTime = true
--- -- Settings.FireMode = "Auto"
--- UpdateWeaponSettings();
--- SetFOV(180);
--- Settings.FovRadius = 200
--- Settings.Aimbot = true
--- Settings.SilentAim = true
--- Settings.Wallbang = true
-
--- wait(5);
--- FlyCharacter(nil, Network.Characters:GetCharacter(LocalPlayer).Root, nil, 10);
-
-Settings.Backtrack = true
-Settings.ClosestCursor = true
-
 local FOV = Drawing.new("Circle");
 FOV.Color = Color3.fromRGB(255, 255, 255);
 FOV.Thickness = 1
@@ -197,35 +198,35 @@ SnapLine.Thickness = .1
 SnapLine.Transparency = 1
 SnapLine.From = MouseVector
 
-local Characters = {}
-local Teams = {}
-local Trackers = {}
+task.spawn(function()
+    while task.wait(Settings.BacktrackMS / 1000) do
+        for Character, CharTrackers in pairs(Trackers) do
+            for Index2, Tracker in pairs(CharTrackers) do
+                Tracker:Destroy();
+            end
+        end
+    end
+end)
 
 local HandleTracking = function(Player, Character)
     Trackers[Character] = {}
-    local T = tick();
     while true do
-        local Now = tick();
-        if ((Now - T) > Settings.BacktrackDelay) then
-            for Index, Tracker in pairs(Trackers[Character]) do
-                Tracker:Destroy();
+        if (Settings.Backtrack) then
+            local Root = Character:FindFirstChild("Root");
+            if (Root and Character.Parent) then
+                local Cloned = Instance.new("Part");
+                Cloned.CFrame = Root.CFrame
+                Cloned.Anchored = true
+                Cloned.CanCollide = false
+                Cloned.Transparency = Settings.ShowBacktrack and .4 or 1
+                Cloned.Size = Vector3.new(1.6, 4, 1.2);
+                Cloned.Parent = Workspace
+                table.insert(Trackers[Character], Cloned);
+            else
+                break;
             end
-            table.clear(Trackers[Character]);
-            T = Now
         end
-
-        local Root = Character:FindFirstChild("Root");
-        if (Root) then
-            local Cloned = Instance.new("Part");
-            Cloned.CFrame = Root.CFrame
-            Cloned.Anchored = true
-            Cloned.CanCollide = false
-            Cloned.Transparency = Settings.ShowBacktrack and .4 or 1
-            Cloned.Size = Vector3.new(1.6, 4, 1.2);
-            Cloned.Parent = Workspace
-            table.insert(Trackers[Character], Cloned)
-        end
-        task.wait();
+        wait();
     end
 end
 
@@ -234,31 +235,38 @@ local IsEnemy = function(Player)
 end
 
 for Index, Player in pairs(Players:GetPlayers()) do
-    local Team = Network.Teams:GetPlayerTeam(Player);
+    local Team = TS.Teams:GetPlayerTeam(Player);
     Teams[Player] = Team
 
-    local Character = Network.Characters:GetCharacter(Player);
+    local Character = TS.Characters:GetCharacter(Player);
     if (Character) then
         Characters[Player] = Character
-        local Destroying;
-        Destroying = Character.Destroying:Connect(function()
+        Character.AncestryChanged:Connect(function()
             Characters[Player] = nil
-            Destroying:Disconnect();
         end)
         Character:WaitForChild("Root");
         if (IsEnemy(Player)) then
             task.spawn(HandleTracking, Player, Character);
         end
+        if (Player == LocalPlayer) then
+            UpdateWeaponSettings();
+        end
     end
 end
-Network.Characters.CharacterAdded:Connect(function(Player, Character)
+TS.Characters.CharacterAdded:Connect(function(Player, Character)
     Characters[Player] = Character
-    Character:WaitForChild("Root");
+    local Root = Character:WaitForChild("Root");
     if (IsEnemy(Player)) then
         HandleTracking(Player, Character);
     end
+    Character.AncestryChanged:Connect(function()
+        Characters[Player] = nil
+    end)
+    if (Player == LocalPlayer) then
+        UpdateWeaponSettings();
+    end
 end)
-Network.Teams.TeamChanged:Connect(function(Player, Team)
+TS.Teams.TeamChanged:Connect(function(Player, Team)
     Teams[Player] = Team
 end)
 
@@ -266,31 +274,31 @@ local GetClosestPlayerVec2 = function()
     local Closest = table.create(3);
     local Vector2Distance = math.huge
     local Vector3Distance = math.huge
-
-    local LocalRoot = Characters[LocalPlayer] and Characters[LocalPlayer]:FindFirstChild("Root");
+    local Hitbox = Characters[LocalPlayer] and Characters[LocalPlayer]:FindFirstChild("Hitbox");
     for Player, Character in pairs(Characters) do
-        local CharacterRoot = Character:FindFirstChild("Root");
-        if (Player ~= LocalPlayer and LocalRoot and CharacterRoot and IsEnemy(Player) and Character.Health.Value > 0) then
-            local Position = Character.Body.Head.Position
-            local Tuple, Visible = CurrentCamera:WorldToViewportPoint(Position);
-            local CharacterVector = Vector2.new(Tuple.X, Tuple.Y);
-            local Vector2Magnitude = (MouseVector - CharacterVector).Magnitude;
-            if (Visible and Vector2Magnitude <= Vector2Distance and Vector2Magnitude <= FOV.Radius and Settings.ClosestCursor) then
-                Vector2Distance = Vector2Magnitude
-                Closest = {Character, CharacterVector, Player}
-            end
+        if (Player ~= LocalPlayer and Hitbox and IsEnemy(Player) and Character:FindFirstChild("Hitbox")) then
+            if (Hitbox.Parent.Health.Value > 0) then
+                local LocalRoot = Hitbox.Parent.Root
+                local Position = Character.Hitbox[Settings.Redirect].Position
+                local Tuple, Visible = CurrentCamera:WorldToViewportPoint(Position);
+                local CharacterVector = Vector2.new(Tuple.X, Tuple.Y);
+                local Vector2Magnitude = (MouseVector - CharacterVector).Magnitude;
 
-            local Vector3Magnitude = (Position - LocalRoot.Position).Magnitude
-            if (Visible and Vector3Magnitude <= Vector3Distance and Vector2Magnitude <= FOV.Radius and Settings.ClosestPlayer) then
-                Vector3Distance = Vector3Magnitude
-                Closest = {Character, CharacterVector, Player}
+                if (Visible and Vector2Magnitude <= Vector2Distance and Vector2Magnitude <= FOV.Radius and Settings.ClosestCursor) then
+                    Vector2Distance = Vector2Magnitude
+                    Closest = {Character, CharacterVector, Player}
+                end
+
+                local Vector3Magnitude = (Position - LocalRoot.Position).Magnitude
+                if (Visible and Vector3Magnitude <= Vector3Distance and Vector2Magnitude <= FOV.Radius and Settings.ClosestPlayer) then
+                    Vector3Distance = Vector3Magnitude
+                    Closest = {Character, CharacterVector, Player}
+                end
             end
         end
-
     end
     return unpack(Closest);
 end
-
 
 UserInputService.InputEnded:Connect(function(Key, GPE)
     local KeyString = string.split(tostring(Key.KeyCode), ".")[3]
@@ -336,18 +344,19 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-debug.setupvalue(Network.Projectiles.KillProjectile, 1, true);
+debug.setupvalue(TS.Projectiles.KillProjectile, 1, true);
 
-local OldInitProjectile = Network.Projectiles.InitProjectile
-Network.Projectiles.InitProjectile = function(...)
+local OldInitProjectile = TS.Projectiles.InitProjectile
+TS.Projectiles.InitProjectile = function(...)
     local Args = {...}
     if (Settings.SilentAim or Settings.Backtrack and Args[5] == LocalPlayer) then
         local ClosestCharacter, Vector, Player = GetClosestPlayerVec2();
+        local Hitbox;
         if (ClosestCharacter and Player) then
-            local CharacterRoot = ClosestCharacter.Root
-            local Viewable = CurrentCamera:GetPartsObscuringTarget({CurrentCamera.CFrame.Position, CharacterRoot.CFrame.Position}, {Characters[LocalPlayer], ClosestCharacter});
+            Hitbox = ClosestCharacter.Hitbox
+            local Viewable = CurrentCamera:GetPartsObscuringTarget({CurrentCamera.CFrame.Position, Hitbox[Settings.Redirect].CFrame.Position}, {Characters[LocalPlayer], ClosestCharacter});
             if (Settings.SilentAim and #Viewable == 0 or Settings.Wallbang) then
-                Args[3] = (CharacterRoot.CFrame.Position + (Vector3.new(math.random(1, 10), math.random(1, 10), math.random(1, 10)) / 10)) - Args[4]
+                Args[3] = (Hitbox[Settings.Redirect].CFrame.Position + (Vector3.new(math.random(1, 10), math.random(1, 10), math.random(1, 10)) / 10)) - Args[4]
                 return OldInitProjectile(unpack(Args));
             end
         end
@@ -366,14 +375,59 @@ Network.Projectiles.InitProjectile = function(...)
 
             for Character, CharacterTrackers in pairs(Trackers) do
                 local DoBackTrack = table.find(CharacterTrackers, Part);
-                if (DoBackTrack) then
-                    print(true);
-                    Args[3] = (Character.Root.CFrame.Position + (Vector3.new(math.random(1, 10), math.random(1, 10), math.random(1, 10)) / 10)) - Args[4]
-                    return OldInitProjectile(unpack(Args)); 
+                if (DoBackTrack and Hitbox) then
+                    Args[3] = (Hitbox[Settings.Redirect].CFrame.Position + (Vector3.new(math.random(1, 10), math.random(1, 10), math.random(1, 10)) / 10)) - Args[4]
+                    return OldInitProjectile(unpack(Args));
                 end
             end
         end
 
     end
     return OldInitProjectile(...);
+end
+
+local CheckPlayers;
+CheckPlayers = function()
+    if (Settings.Triggerbot) then
+        local UnitRay = Mouse.UnitRay
+        local LocalCharacter = Characters[LocalPlayer]
+        if (not LocalCharacter) then return end
+        local Backpack = LocalCharacter:FindFirstChild("Backpack");
+        if (not Backpack) then return end
+        local IgnoreList = {LocalCharacter}
+        local EquippedWeapon = LocalCharacter.Backpack.Equipped.Value
+        for Index, Child in pairs(Workspace:GetChildren()) do
+            if (Child.Name == EquippedWeapon.Name) then
+                table.insert(IgnoreList, Child);
+            end
+        end
+        local Part = Workspace:FindPartOnRayWithIgnoreList(Ray.new(UnitRay.Origin, UnitRay.Direction * 1000), IgnoreList);
+        local IsPlayer;
+        for Player, Character in pairs(Characters) do
+            if (Part and IsEnemy(Player) and Part:IsDescendantOf(Character)) then
+                IsPlayer = true
+                break;
+            end
+        end
+        if (IsPlayer) then
+            wait(Settings.TriggerbotMS / 1000);
+            mouse1press();
+            mouse1release();
+            wait();
+            CheckPlayers();
+        end
+    end
+end
+
+Mouse.Move:Connect(CheckPlayers);
+
+Settings.NoRecoil = true
+Settings.Triggerbot = true
+Settings.Aimbot = true
+Settings.InstantAimTime = true
+Settings.ClosestCursor = true
+Settings.Backtrack = true
+Settings.ShowBacktrack = true
+if (Characters[LocalPlayer]) then
+    UpdateWeaponSettings();
 end
