@@ -30,6 +30,7 @@ local GetChildren = Game.GetChildren;
 local FindFirstChild = Game.FindFirstChild;
 local CFrame = CFrame.new;
 local sort = table.sort;
+local info = debug.info;
 local Checkcaller = checkcaller;
 local Flags = {};
 local BackupIndex, BackupNewIndex;
@@ -37,6 +38,14 @@ local BackupIndex, BackupNewIndex;
 local function GetLocal(index) 
     for i,v in Pairs(Getgc(true)) do
         if Type(v) == "table" and Rawget(v, index) then
+            return v;
+        end;
+    end;
+end;
+
+local function GetFunction(name) 
+    for i,v in Pairs(Getgc()) do
+        if Type(v) == "function" and info(v, "n") == name then
             return v;
         end;
     end;
@@ -72,6 +81,13 @@ end));
 
 local Variables = GetLocal("primarystored");
 local Weapon = GetLocal("firebullet");
+local RotCamera = GetFunction("RotCamera");
+
+local BackupRot;
+BackupRot = hookfunction(RotCamera, function(...)
+    if Flags.NoRecoil then return end;
+    return BackupRot(...);
+end);
 
 -- Player
 do 
@@ -117,9 +133,23 @@ do
     });
 
     Combat.Toggle({
+        Text = "No Recoil",
+        Callback = function(bool) 
+            Flags.NoRecoil = bool;
+        end;
+    });
+
+    Combat.Toggle({
         Text = "Trigger Bot",
         Callback = function(bool) 
-            Flags.Triggerbot = bool
+            Flags.Triggerbot = bool;
+        end;
+    });
+
+    Combat.Toggle({
+        Text = "Rage Bot",
+        Callback = function(bool) 
+            Flags.Ragebot = bool;
         end;
     });
 end;
@@ -142,7 +172,7 @@ local GetClosestPlayer; do
         Callback = function(bool) 
             Flags.TeamCheck = bool;
         end
-    })
+    });
 
     Aimbot.Dropdown({
         Text = "Target Part",
@@ -214,6 +244,16 @@ game.RunService.RenderStepped:Connect(function()
         if Flags.TeamCheck and Player.TeamColor == LocalPlayer.TeamColor then return end;
         
         Weapon.firebullet();
+    end;
+
+    -- // I'll add raycast check later
+    if Flags.Ragebot and LocalPlayer.Character then
+        local Closest = GetClosestPlayer();
+        local _, Visible = WorldToViewportPoint(Camera, Closest.Character.Head.Position);
+        if Visible then
+            Camera.CFrame = CFrame(Camera.CFrame.Position, Closest.Character.Head.Position);
+            Weapon.firebullet();
+        end;
     end;
 end);
 
