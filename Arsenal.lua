@@ -21,6 +21,7 @@ local Pairs = pairs;
 local ToastNotif = syn.toast_notification;
 local Game = game;
 local LocalPlayer = Game.Players.LocalPlayer;
+--local GetPlayerFromCharacter = Game.Players.GetPlayerFromCharacter;
 local UserInputService = Game.UserInputService;
 local Workspace = Game.Workspace;
 local Camera = Workspace.CurrentCamera;
@@ -28,6 +29,9 @@ local WorldToViewportPoint = Camera.WorldToViewportPoint;
 local IsMouseButtonPressed = UserInputService.IsMouseButtonPressed;
 local GetChildren = Game.GetChildren;
 local FindFirstChild = Game.FindFirstChild;
+local IsDescendantOf = Game.IsDescendantOf;
+local Raycast = Workspace.Raycast;
+local RaycastParams = RaycastParams.new;
 local CFrame = CFrame.new;
 local sort = table.sort;
 local info = debug.info;
@@ -51,8 +55,17 @@ local function GetFunction(name)
     end;
 end;
 
+-- Remove in production
+--[[
+    local format = string.format;
+local cprint = rconsoleprint;
+local function printf(...) 
+    return cprint(format(...) .. "\n");
+end;
+]]
+
 local function SynapseNotification(Content, Type) 
-    if not ToastNotif then return warn(Content); end;
+    if not ToastNotif then return rconsoleprint(Content .. "\n"); end;
     ToastNotif({
         Type = Type or ToastType.Info,
         Duration = 7.5,
@@ -63,11 +76,19 @@ end;
 
 SynapseNotification("ALERT: You are running a beta version of Fates Hub.\nPlease report any bugs to the discord server.\nIf you aren't you should use an alt.");
 
+local Variables = GetLocal("primarystored");
+local Crouch = GetLocal("ctrlcrouch");
+local Weapon = GetLocal("firebullet");
+local RotCamera = GetFunction("RotCamera");
+local ammocount = Variables.ammocount;
+
 BackupIndex = hookmetamethod(Game, "__index", newcclosure(function(self, idx) 
     if idx == "WalkSpeed" then
         return 16;
     elseif idx == "JumpPower" then
         return 50;
+    elseif Flags.InfAmmo and self == ammocount and idx == "Value" then
+        return 100;
     end;
     return BackupIndex(self, idx);
 end));
@@ -78,10 +99,6 @@ BackupNewIndex = hookmetamethod(Game, "__newindex", newcclosure(function(self, i
     end;
     return BackupNewIndex(self, idx, val);
 end));
-
-local Variables = GetLocal("primarystored");
-local Weapon = GetLocal("firebullet");
-local RotCamera = GetFunction("RotCamera");
 
 local BackupRot;
 BackupRot = hookfunction(RotCamera, function(...)
@@ -139,17 +156,26 @@ do
         end;
     });
 
-    Combat.Toggle({
+    --[[
+            Combat.Toggle({
         Text = "Trigger Bot",
         Callback = function(bool) 
             Flags.Triggerbot = bool;
         end;
     });
+    temp removed due to issues]] 
 
     Combat.Toggle({
         Text = "Rage Bot",
         Callback = function(bool) 
             Flags.Ragebot = bool;
+        end;
+    });
+
+    Combat.Toggle({
+        Text = "Auto Crouch",
+        Callback = function(bool) 
+            Flags.AutoCrouch = bool;
         end;
     });
 end;
@@ -185,13 +211,13 @@ local GetClosestPlayer; do
         }
     });
 
-    GetClosestPlayer = function() 
+    GetClosestPlayer = function(novisible) 
         if not LocalPlayer.Character or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
     
         local LPos = LocalPlayer.Character.HumanoidRootPart.Position;
         local Players = {};
     
-        for i,v in pairs(GetChildren(Game.Players)) do
+        for i,v in Pairs(GetChildren(Game.Players)) do
             if v ~= LocalPlayer then
                 if Flags.TeamCheck and v.TeamColor == LocalPlayer.TeamColor then 
                     continue;
@@ -200,6 +226,12 @@ local GetClosestPlayer; do
                 local Character = v.Character;
                 local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
                 if HumanoidRootPart then
+                    if novisible then -- doesnt care about visibilty
+                        local Between = (HumanoidRootPart.Position - LPos).magnitude;
+                        Players[#Players+1] = {Between, v};
+                        continue;
+                    end;
+
                     local _, Visible = WorldToViewportPoint(Camera, HumanoidRootPart.Position);
                     if Visible then
                         local Between = (HumanoidRootPart.Position - LPos).magnitude;
@@ -215,7 +247,7 @@ local GetClosestPlayer; do
     end;
 end;
 
-local Mouse = LocalPlayer:GetMouse();
+--local Mouse = LocalPlayer:GetMouse();
 
 game.RunService.RenderStepped:Connect(function() 
     if Flags.Aimbot and IsMouseButtonPressed(UserInputService, Enum.UserInputType.MouseButton2) then
@@ -230,30 +262,39 @@ game.RunService.RenderStepped:Connect(function()
         end;
     end;
 
-    if Flags.InfAmmo then
-        Variables.primarystored.Value = 100;
-        Variables.ammocount.Value = 100;
-    end;
-
-    if Flags.Triggerbot then
+    --[[
+            if Flags.Triggerbot then
         if not Mouse.Target or not Mouse.Target.Parent then return end;
 
         local Parent = Mouse.Target.Parent;
-        local Player = FindFirstChild(Game.Players, Parent.Name);
+        local Player = GetPlayerFromCharacter(Game.Players, Parent);
         if not Player or Player == LocalPlayer then return end;
         if Flags.TeamCheck and Player.TeamColor == LocalPlayer.TeamColor then return end;
         
+        printf("Trigger Bot -> %s", Player.Name);
         Weapon.firebullet();
     end;
+    ]]
 
     -- // I'll add raycast check later
-    if Flags.Ragebot and LocalPlayer.Character then
-        local Closest = GetClosestPlayer();
-        local _, Visible = WorldToViewportPoint(Camera, Closest.Character.Head.Position);
-        if Visible then
+    if Flags.Ragebot then
+        local Closest = GetClosestPlayer(true); -- will be able to change when we have the new ui
+        if not Closest or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
+        
+        local Head = LocalPlayer.Character.Head.Position;
+        local Params = RaycastParams();
+        Params.FilterDescendantsInstances = { LocalPlayer.Character, Camera };
+
+        local Result = Raycast(Workspace, Head, Closest.Character.HumanoidRootPart.Position - Head, Params);
+        if Result and IsDescendantOf(Result.Instance, Closest.Character) then
             Camera.CFrame = CFrame(Camera.CFrame.Position, Closest.Character.Head.Position);
             Weapon.firebullet();
         end;
+    end;
+
+    if Flags.AutoCrouch then
+        local ctrlcrouch = Crouch.ctrlcrouch; 
+        ctrlcrouch.Value = not ctrlcrouch.Value;
     end;
 end);
 
