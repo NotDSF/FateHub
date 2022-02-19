@@ -176,11 +176,11 @@ do
     GetKey("AttemptArrest", {});
 end;
 
-for i,v in pairs(Keys) do
+for i,v in Pairs(Keys) do
     rconsoleinfo(string.format("Automatically grabbed %s key: %s\n", i, v));
 end;
 
-for i,v in pairs(Getgc(true)) do
+for i,v in Pairs(Getgc(true)) do
     if Type(v) == "function" and info(v, "n") == "CheatCheck" then
         rconsoleinfo("Disabled anti cheat!\n");
         hookfunction(v, function() end);
@@ -652,7 +652,7 @@ local GetClosestPlayer; do
         local LPos = LocalPlayer.Character.HumanoidRootPart.Position;
         local Players = {};
     
-        for i,v in pairs(GetChildren(Game.Players)) do
+        for i,v in Pairs(GetChildren(Game.Players)) do
             if v ~= LocalPlayer and v.TeamColor ~= LocalPlayer.TeamColor then
                 local Character = v.Character;
                 local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
@@ -719,29 +719,24 @@ Game.RunService.RenderStepped:Connect(function()
         local Closest = GetClosestPlayer();
         if Closest then
             local Target = Flags.AimbotTarget or "Head";
-            local _, Visible = WorldToViewportPoint(Camera, Closest.Character[Target].Position);
-            if Visible then
-                Camera.CFrame = CFrame(Camera.CFrame.Position, Closest.Character[Target].Position);
-                --Camera.CFrame = CFrame(Camera.CFrame.Position, Closest[Target].Position); for first person
-            end;
+            Camera.CFrame = CFrame(Camera.CFrame.Position, Closest.Character[Target].Position);
         end;
     end;
 
-    if Flags.Teleporting or Flags.AutoParachute then
-        if IsSkydiving() then
-            Paraglide.Parachute();
-        end;
+    if Flags.Teleporting or Flags.AutoParachute and IsSkydiving() then
+        Paraglide.Parachute();
     end;
 
     if Flags.VehicleFly then
         local Vehicle = Vehicle.GetLocalVehiclePacket();
         if Vehicle and Vehicle.Mass then
             Chassis.SetGravity(Vehicle, 0);
-            Vehicle.Model.Engine.CFrame = Vehicle.Model.Engine.CFrame + Camera.CFrame.lookVector; -- Fate you will have to implement this function properly (im am not experienced with cframe manipulation)
+            Vehicle.Model.Engine.CFrame = Vehicle.Model.Engine.CFrame + Camera.CFrame.LookVector; -- Fate you will have to implement this function properly (im am not experienced with cframe manipulation)
         end;
     end;
 
-    if Flags.Ninja then
+    --[[
+            if Flags.Ninja then
         local Closest = GetClosestPlayer();
         local Vehicle = Vehicle.GetLocalVehiclePacket();
         if Vehicle and Closest then
@@ -759,6 +754,7 @@ Game.RunService.RenderStepped:Connect(function()
             end;
         end;
     end;
+    ]]
 
     if Flags.Pickpocket then
         local Closest = GetClosestPlayer();
