@@ -20,8 +20,8 @@ local Getgc = getgc;
 local Pairs = pairs;
 local ToastNotif = syn.toast_notification;
 local Game = game;
-local LocalPlayer = Game.Players.LocalPlayer;
---local GetPlayerFromCharacter = Game.Players.GetPlayerFromCharacter;
+local GPlayers = Game.Players;
+local LocalPlayer = GPlayers.LocalPlayer;
 local UserInputService = Game.UserInputService;
 local Workspace = Game.Workspace;
 local Camera = Workspace.CurrentCamera;
@@ -35,6 +35,7 @@ local RaycastParams = RaycastParams.new;
 local CFrame = CFrame.new;
 local sort = table.sort;
 local info = debug.info;
+local MouseButton2 = Enum.UserInputType.MouseButton2;
 local Checkcaller = checkcaller;
 local Flags = {};
 local BackupIndex, BackupNewIndex;
@@ -55,14 +56,11 @@ local function GetFunction(name)
     end;
 end;
 
--- Remove in production
---[[
-    local format = string.format;
+local format = string.format;
 local cprint = rconsoleprint;
 local function printf(...) 
     return cprint(format(...) .. "\n");
 end;
-]]
 
 local function SynapseNotification(Content, Type) 
     if not ToastNotif then return rconsoleprint(Content .. "\n"); end;
@@ -156,14 +154,12 @@ do
         end;
     });
 
-    --[[
-            Combat.Toggle({
+    Combat.Toggle({
         Text = "Trigger Bot",
         Callback = function(bool) 
             Flags.Triggerbot = bool;
         end;
     });
-    temp removed due to issues]] 
 
     Combat.Toggle({
         Text = "Rage Bot",
@@ -217,7 +213,7 @@ local GetClosestPlayer; do
         local LPos = LocalPlayer.Character.HumanoidRootPart.Position;
         local Players = {};
     
-        for i,v in Pairs(GetChildren(Game.Players)) do
+        for i,v in Pairs(GetChildren(GPlayers)) do
             if v ~= LocalPlayer then
                 if Flags.TeamCheck and v.TeamColor == LocalPlayer.TeamColor then 
                     continue;
@@ -247,36 +243,27 @@ local GetClosestPlayer; do
     end;
 end;
 
---local Mouse = LocalPlayer:GetMouse();
+local Mouse = LocalPlayer:GetMouse();
 
 game.RunService.RenderStepped:Connect(function() 
-    if Flags.Aimbot and IsMouseButtonPressed(UserInputService, Enum.UserInputType.MouseButton2) then
+    if Flags.Aimbot and IsMouseButtonPressed(UserInputService, MouseButton2) then
         local Closest = GetClosestPlayer();
         if Closest then
             local Target = Flags.AimbotTarget or "Head";
-            local _, Visible = WorldToViewportPoint(Camera, Closest.Character[Target].Position);
-            if Visible then
-                Camera.CFrame = CFrame(Camera.CFrame.Position, Closest.Character[Target].Position);
-                --Camera.CFrame = CFrame(Camera.CFrame.Position, Closest[Target].Position); for first person
-            end;
+            Camera.CFrame = CFrame(Camera.CFrame.Position, Closest.Character[Target].Position);
         end;
     end;
 
-    --[[
-            if Flags.Triggerbot then
+    if Flags.Triggerbot then
         if not Mouse.Target or not Mouse.Target.Parent then return end;
 
         local Parent = Mouse.Target.Parent;
-        local Player = GetPlayerFromCharacter(Game.Players, Parent);
-        if not Player or Player == LocalPlayer then return end;
-        if Flags.TeamCheck and Player.TeamColor == LocalPlayer.TeamColor then return end;
-        
-        printf("Trigger Bot -> %s", Player.Name);
+        local Player = FindFirstChild(GPlayers, Parent.Name);
+        if not Player or Player == LocalPlayer or Flags.TeamCheck and Player.TeamColor == LocalPlayer.TeamColor then return end;
+
         Weapon.firebullet();
     end;
-    ]]
 
-    -- // I'll add raycast check later
     if Flags.Ragebot then
         local Closest = GetClosestPlayer(true); -- will be able to change when we have the new ui
         if not Closest or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
