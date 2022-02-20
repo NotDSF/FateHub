@@ -828,6 +828,7 @@ local function Tab(Window)
         TabButton.Size = UDim2_fromOffset(70, 20)
         TabButton.Font = Enum.Font.SourceSansSemibold
         TabButton.TextColor3 = fromRGB(225, 225, 225)
+        TabButton.Text = Name
         TabButton.TextSize = 14
         TabButton.Parent = Window
 
@@ -859,7 +860,7 @@ local function Tab(Window)
             TabFrame.Visible = true
             TabButton.BackgroundColor3 = fromRGB(20, 20, 20)
             TabButton.BorderColor3 = fromRGB(20, 20, 20)
-            TabButton.TextColor = Colorscheme
+            TabButton.TextColor3 = Colorscheme
             BorderHide.Visible = true
         end)
 
@@ -1004,14 +1005,14 @@ function UiLib:CreateWindow(Name, Game)
     return Tab(MainFrame)
 end
 
-return UiLib;
+return UiLib
 
---[[
-    local Window = UiLib:CreateWindow('<font color="rgb(0, 0, 255)">FH</font> v3', 'test')
+--[[local Window = UiLib:CreateWindow('<font color="rgb(0, 0, 255)">FH</font> v3', 'test')
 local tab1 = Window:Tab('test1')
+local tab2 = Window:Tab('a')
 local Section1 = tab1:Section('test')
 local Section2 = tab1:Section('a')
-local Section3 = tab1:Section('Rage')
+local Section3 = tab2:Section('Rage')
 
 Section1:Toggle('test', false, function(a)
     print(a)
@@ -1038,4 +1039,7 @@ end, function()
       print('tess') 
 end)
 
-]]
+Section3:Toggle('Enabled', false, function() end)
+Section3:Toggle('funny', true, function() end)
+Section3:Toggle('Autowall', true, function() end)
+Section3:Slider('Min Damage', 1, 100, 100, function() end)]]
