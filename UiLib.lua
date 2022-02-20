@@ -997,14 +997,17 @@ function UiLib:CreateWindow(Name, Game)
                     MouseMove:Disconnect()
                     EndedCon:Disconnect()
                 end
-            end
+            end)
         end
     end)
 
     return Tab(MainFrame)
 end
 
-local Window = UiLib:CreateWindow('<font color="rgb(0, 0, 255)">FH</font> v3', 'test')
+return UiLib;
+
+--[[
+    local Window = UiLib:CreateWindow('<font color="rgb(0, 0, 255)">FH</font> v3', 'test')
 local tab1 = Window:Tab('test1')
 local Section1 = tab1:Section('test')
 local Section2 = tab1:Section('a')
@@ -1034,3 +1037,5 @@ Section1:Keybind('Keybind', nil, function(a)
 end, function() 
       print('tess') 
 end)
+
+]]
