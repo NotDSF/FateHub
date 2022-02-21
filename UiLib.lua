@@ -163,6 +163,10 @@ local function UiElements(Section)
                     TweenService:Create(Title, TweenInfo.new(0.2), {
                         TextColor3 = ColorschemeS
                     }):Play()
+                    DropToggle = not DropToggle
+                    Drop:TweenSize(UDim2_fromOffset(170, DropToggle and 200 or 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quint, 0.5, true)
+                    task.wait(0.4);
+                    Drop.Visible = DropToggle
                 end)
 
                 Button.MouseEnter:Connect(function()
@@ -881,7 +885,9 @@ local function Tab(Window)
     return Ret
 end
 
-function UiLib:CreateWindow(Name, Game)
+function UiLib:CreateWindow(Name, Game, ColorScheme)
+    Colorscheme = ColorScheme
+
     local ScreenGui = Instance_new('ScreenGui')
     local MainFrame = Instance_new('Frame')
     local Title = Instance_new('TextLabel')

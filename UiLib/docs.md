@@ -1,6 +1,6 @@
 Window:
 ```lua
-UiLib:CreateWindow(<string name>, <string game>)
+UiLib:CreateWindow(<string name>, <string game>, <Color3 colorscheme>)
 ```
 Tab:
 ```lua

@@ -1,5 +1,3 @@
-do return end -- not done automation for when the track launches, will also add  song speed
-
 if (not game:IsLoaded()) then
     game.Loaded:Wait();
 end
@@ -11,40 +9,24 @@ local Options = {
 }
 
 local Option = Options.Perfect
+local HitChance = 100
 
-task.spawn(function()
-    local Lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kinlei/MaterialLua/master/Module.lua"))();
-    local UI = Lib.Load({
-        Title = "Fates Hub",
-        Style = 1,
-        SizeX = 400,
-        SizeY = 400,
-        Theme = "Dark"
-    });
+local UI = loadfile("UILib.lua")();
+local MainWindow = UI:CreateWindow("Fate Hub", "RoBeats", Color3.fromRGB(0, 255, 255));
 
-    local AutoPlay = UI.New({
-        Title = "AutoPlay"
-    });
+local AutoPlay = MainWindow:Tab("Autoplay");
+local AutoPlayAccuracy = AutoPlay:Section("Accuracy");
 
-    AutoPlay.Dropdown({
-        Text = "Option",
-        Callback = function(Value)
-            Option = Options[Value]
-        end,
-        Options = {
-            "Perfect",
-            "Great",
-            "Okay",
-        }
-    });
+AutoPlayAccuracy:Dropdown("Autoplay Option", "Perfect", {"Perfect", "Great", "Okay"}, function(Callback)
+    Option = Options[Callback]
 end);
+
+AutoPlayAccuracy:Slider("Hit Chance", 0, 100, 100, function(Callback)
+    HitChance = Callback
+end, false);
 
 local Players = game:GetService("Players");
 local LocalPlayer = Players.LocalPlayer
-
-if (not LocalPlayer.Character) then
-    LocalPlayer.CharacterAdded:Wait();
-end
 
 local Notes = {
     A = { IsHolding = false; LastPressed = tick() };
@@ -55,32 +37,30 @@ local Notes = {
 
 local ItemChanged;
 
-local GetNotes = function()
-    if (ItemChanged) then
-        ItemChanged:Disconnect();
+local GetCharacter = function()
+    local Character, Parent
+    local WorkspaceChildren = game:GetService("Workspace"):GetChildren();
+    for Index = 1, #WorkspaceChildren do
+        local Child = WorkspaceChildren[Index]
+        local ChildChildren = Child:GetChildren();
+        for Index2, Child2 in pairs(ChildChildren) do
+            local Humanoid = Child2:FindFirstChild("Humanoid");
+            if (Humanoid and Humanoid.DisplayName == LocalPlayer.DisplayName) then
+                Parent = Child
+                Character = Child2
+                break;
+            end
+        end
     end
+    return Character, Parent
+end
 
+local GetNotes = function()
     for Index, Value in pairs(Notes) do
         Notes[Index].Position = nil
     end
 
-    local Parent, Character;
-    repeat
-        local WorkspaceChildren = game:GetService("Workspace"):GetChildren();
-        for Index = 1, #WorkspaceChildren do
-            local Child = WorkspaceChildren[Index]
-            local ChildChildren = Child:GetChildren();
-            for Index2, Child2 in pairs(ChildChildren) do
-                local Humanoid = Child2:FindFirstChild("Humanoid");
-                if (Humanoid and Humanoid.DisplayName == LocalPlayer.DisplayName) then
-                    Parent = Child
-                    Character = Child2
-                    break;
-                end
-            end
-        end
-        task.wait(.5);
-    until Parent and Character
+    local Character, Parent = GetCharacter();
 
     local Children = Parent:GetChildren();
     for Index = 1, #Children do
@@ -107,17 +87,29 @@ local GetNotes = function()
             end
         end
     end
-
 end
 
-if (LocalPlayer.Character) then
-    LocalPlayer.CharacterRemoving:Connect(function()
-        print(true);
+
+if (not LocalPlayer.Character) then
+    local Character, Parent = GetCharacter();
+    if (not Character) then
+        LocalPlayer.CharacterAdded:Wait();
+    end
+
+    if (Character and Parent) then
         GetNotes();
-    end);
-else
-    GetNotes();
+    end
 end
+
+LocalPlayer.CharacterRemoving:Connect(function()
+    local Character, Parent = GetCharacter();
+    repeat
+        task.wait(.5);
+    until Character and Parent
+    local Sound = Parent:FindFirstChildOfClass("Sound");
+    Sound:GetPropertyChangedSignal("Volume");
+    GetNotes();
+end)
 
 local keypress = function(Key)
     keypress(Key);
@@ -134,6 +126,11 @@ ItemChanged = game.ItemChanged:Connect(function(Item, Prop)
         local Position = Item.CFrame.Position
         local now = tick();
         local A, D, S, F = Notes.A, Notes.D, Notes.S, Notes.F
+
+        local PassedHitChance = math.random(1, 100) < HitChance
+        if (not PassedHitChance) then
+            return
+        end
 
         if ((A.Position - Position).Magnitude <= Option and now - A.LastPressed > .05) then --0x41
             if (A.IsHolding and Transparency == 0.5) then
