@@ -1,4 +1,3 @@
-
 if getgenv().FatesHub then error("Fates Hub already loaded!"); end;
 getgenv().FatesHub = true;
 
@@ -10,16 +9,17 @@ type Main = {
     Slider: (self: Main, name: string, min: number, max: number, default: number, callback: (value: number) -> nil, nofill: boolean?, floor: boolean?) -> nil,
     Colorpicker: (self: Main, name: string, StartingColor: Color3, callback: (color: Color3) -> nil) -> nil,
     Keybind: (self: Main, name: string, StartingKey: Enum.KeyCode?, onset: (keycode: Enum.KeyCode) -> nil, oninput: () -> nil) -> nil,
-    Button: (self: Main, name: string, callback: () -> nil) -> nil
+    Button: (self: Main, name: string, callback: () -> nil) -> nil,
 }
 
 type Section = { Section: (self: Section, name: string) -> Main }
-type Window = { Tab: (self: Window, name: string) -> Section }
+type Window = { Tab: (self: Window, name: string) -> Section, SetKeybindClose: (self: Window, KeyCode: Enum.KeyCode) -> nil }
 type Library = { CreateWindow: (self: Library, name: string, game: string) -> Window }
 
 local TNow = tick();
 local Lib: Library = loadstring(readfile("UILib.lua"))();
 local Window = Lib:CreateWindow("FH", "Arsenal");
+Window:SetKeybindClose(Enum.KeyCode.F5);
 
 local Rawget = rawget;
 local Type = typeof;
@@ -37,12 +37,17 @@ local IsMouseButtonPressed = UserInputService.IsMouseButtonPressed;
 local GetChildren = Game.GetChildren;
 local FindFirstChild = Game.FindFirstChild;
 local IsDescendantOf = Game.IsDescendantOf;
+--local GetDescendants = Game.GetDescendants;
+local IsA = Game.IsA;
 local Raycast = Workspace.Raycast;
+--local match = string.match;
 local RaycastParams = RaycastParams.new;
 local CFrame = CFrame.new;
 local sort = table.sort;
 local info = debug.info;
 local Delay = task.delay;
+local Tick = tick;
+local fromHSV = Color3.fromHSV;
 local MouseButton2 = Enum.UserInputType.MouseButton2;
 local Checkcaller = checkcaller;
 local Flags = {};
@@ -119,7 +124,7 @@ BackupRot = hookfunction(RotCamera, function(...)
     return BackupRot(...);
 end);
 
-local function GetClosestPlayer(novisible) 
+local function GetClosestPlayer(novisible, maxdistance) 
     if not LocalPlayer.Character or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
 
     local LPos = LocalPlayer.Character.HumanoidRootPart.Position;
@@ -133,16 +138,19 @@ local function GetClosestPlayer(novisible)
 
             local Character = v.Character;
             local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
+
             if HumanoidRootPart then
+                local Between = (HumanoidRootPart.Position - LPos).magnitude;
+
+                if maxdistance and Between > maxdistance then continue; end;
+
                 if novisible then -- doesnt care about visibilty
-                    local Between = (HumanoidRootPart.Position - LPos).magnitude;
                     Players[#Players+1] = {Between, v};
                     continue;
                 end;
 
                 local _, Visible = WorldToViewportPoint(Camera, HumanoidRootPart.Position);
                 if Visible then
-                    local Between = (HumanoidRootPart.Position - LPos).magnitude;
                     Players[#Players+1] = {Between, v};
                 end;
             end;
@@ -165,6 +173,7 @@ do
     RageBot:Toggle("Enabled", false, function(value) Flags.RageBot = value; end);
     RageBot:Toggle("Visible Check", false, function(value) Flags.RageVisible = value; end);
     RageBot:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.RageTarget = selected; end);
+    RageBot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.RageBotMaxDistane = value; end);
 
     local TriggerBot = LegitTab:Section("Trigger");
     TriggerBot:Toggle("Enabled", false, function(value) Flags.TriggerBot = value; end);    
@@ -174,14 +183,18 @@ do
     Aimbot:Toggle("Enabled", false, function(value) Flags.Aimbot = value end);
     Aimbot:Toggle("Visible Check", true, function(value) Flags.AimbotVisible = value; end);
     Aimbot:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.AimbotTarget = selected; end);
+    Aimbot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.AimbotMaxDistance = value; end)
 
     local Weapon = LegitTab:Section("Weapon");
     Weapon:Toggle("Infinite Ammo", false, function(value) Flags.InfiniteAmmo = value; end);
     Weapon:Toggle("No Recoil", false, function(value) Flags.NoRecoil = value; end);
     Weapon:Toggle("No Spread", false, function(value) Flags.NoSpread = value; end);
+    Weapon:Toggle("Rainbow Weapon", false, function(value) Flags.WepRainbow = value; end);
 
     Flags.AimbotVisible = true;
     Flags.TriggerBotDelay = 0;
+    Flags.AimbotMaxDistance = 9999;
+    Flags.RageBotMaxDistane = 9999;
 end;
 
 -- Player
@@ -209,7 +222,10 @@ do
     local Visual = Window:Tab("Visual");
     local Main = Visual:Section("Main");
 
-    Main:Slider("FOV", 1, 150, 70, function(value) Flags.FieldOfView = value; end);
+    Main:Toggle("Full Bright", false, function(value) game.Lighting.Brightness = value and 5 or 3; end);
+    Main:Toggle("Shadows", game.Lighting.GlobalShadows, function(value) game.Lighting.GlobalShadows = value; end);
+    Main:Slider("FOV", 1, 70, 70, function(value) Flags.FieldOfView = value; end);
+    Main:Slider("Time", 1, 24, string.match(game.Lighting.TimeOfDay, "(%d+):%d+:%d+") + 0, function(value) game.Lighting.TimeOfDay = string.format("%d:00:00", value); end);
 end;
 
 -- Misc
@@ -227,7 +243,11 @@ do
         end;
         Flags.ModCheck = value;
     end);
+
+    local Options = Misc:Section("Options");
+    Options:Keybind("UI Open", Enum.KeyCode.F5, function(Keybind) Window:SetKeybindClose(Keybind) end, function() end);
 end;
+
 
 local Mouse = LocalPlayer:GetMouse();
 
@@ -241,7 +261,7 @@ game.RunService.RenderStepped:Connect(function()
     if equipped.Value == "none" then return end;
 
     if Flags.Aimbot and IsMouseButtonPressed(UserInputService, MouseButton2) then
-        local Closest = GetClosestPlayer(not Flags.AimbotVisible);
+        local Closest = GetClosestPlayer(not Flags.AimbotVisible, Flags.AimbotMaxDistance);
         if Closest then
             local Target = Flags.AimbotTarget or "Head";
             Camera.CFrame = CFrame(Camera.CFrame.Position, Closest.Character[Target].Position);
@@ -270,7 +290,7 @@ game.RunService.RenderStepped:Connect(function()
     end;
 
     if Flags.RageBot and FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then
-        local Closest = GetClosestPlayer(not Flags.RageVisible);
+        local Closest = GetClosestPlayer(not Flags.RageVisible, Flags.RageBotMaxDistane);
 
         if Closest then
             local Head = LocalPlayer.Character.Head.Position;
@@ -292,6 +312,15 @@ game.RunService.RenderStepped:Connect(function()
             ctrlcrouch.Value = not ctrlcrouch.Value;
         end);
     end;
+
+    if Flags.WepRainbow and FindFirstChild(Camera, "Arms") then
+        for i,v in Pairs(GetChildren(Camera.Arms)) do
+            if IsA(v, "MeshPart") then
+                local Hue = (Tick() / 5) % 1; -- fates esp coming in clutch
+                v.Color = fromHSV(Hue, 1, 1);
+            end;
+        end;
+    end;
 end);
 
-SynapseNotification(string.format("Loaded in %ss", tick() - TNow), ToastType.Success);
+SynapseNotification(string.format("Loaded in %ss", Tick() - TNow), ToastType.Success);
