@@ -14,6 +14,7 @@ local Colorscheme = Color3.fromRGB(255, 50, 150)
 
 -- Config
 local SectionSpace = 10
+local KeybindClose = Enum.KeyCode.BackSlash
 
 local UiLib = {}
 local Tabs = {}
@@ -21,7 +22,7 @@ local Tabs = {}
 local function UiElements(Section)
     local Ret = {}
     local SectionalY = 15
-    
+ 
     function Ret:Toggle(Name, Default, Callback)
         local ToggleMain = Instance_new('TextButton')
         local Title = Instance_new('TextLabel')
@@ -872,6 +873,11 @@ local function Tab(Window)
 
         return Section(TabFrame)
     end
+
+    function Ret:SetKeybindClose(Keycode) 
+        KeybindClose = Keycode;
+    end
+
     return Ret
 end
 
@@ -955,7 +961,7 @@ function UiLib:CreateWindow(Name, Game)
 
     local StatusLength = CurrentTime.Position.X.Offset + CurrentTime.AbsoluteSize.X
     local VisiblityToggle = true
-    local LoadTime = os.time()
+    --local LoadTime = os.time()
 
     StatusFrame.Size = UDim2_fromOffset(StatusLength, 15)
     StatusFrame.Position = UDim2_fromOffset(500 - StatusLength, 7)
@@ -974,7 +980,7 @@ function UiLib:CreateWindow(Name, Game)
     end)
 
     UserInputService.InputBegan:Connect(function(input, gp)
-        if input.KeyCode == Enum.KeyCode.BackSlash and not gp then
+        if input.KeyCode == KeybindClose and not gp then
             VisiblityToggle = not VisiblityToggle
             
             MainFrame.Visible = VisiblityToggle
