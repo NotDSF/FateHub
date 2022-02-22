@@ -1,6 +1,9 @@
 Window:
 ```lua
 UiLib:CreateWindow(<string name>, <string game>, <Color3 colorscheme>)
+
+Window:GenerateConfig() <string configJSON>
+Window:LoadConfig(<string configJSON>)
 ```
 Tab:
 ```lua
