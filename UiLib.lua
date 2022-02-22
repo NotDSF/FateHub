@@ -14,7 +14,7 @@ local Colorscheme = Color3.fromRGB(255, 50, 150)
 
 -- Config
 local SectionSpace = 10
-local KeybindClose = Enum.KeyCode.BackSlash
+-- local KeybindClose = Enum.KeyCode.BackSlash
 
 local UiLib = {}
 local Tabs = {}
@@ -53,10 +53,11 @@ local function UiElements(Section)
         Status.Parent = ToggleMain
 
         local Toggle = Default
+        local Ret = {}
         local EnterTween = TweenService:Create(Title, TweenInfo.new(0.2), {TextColor3 = fromRGB(200, 200, 200)})
-        
-        ToggleMain.MouseButton1Click:Connect(function( ... )
-            Toggle = not Toggle
+
+        local function ToggleSet(set)
+            Toggle = set or not Toggle
             Callback(Toggle)
 
             TweenService:Create(Status, TweenInfo.new(0.2), {
@@ -65,7 +66,12 @@ local function UiElements(Section)
             TweenService:Create(Title, TweenInfo.new(0.2), {
                 TextColor3 = (Toggle and fromRGB(225, 225, 225) or fromRGB(150, 150, 150))
             }):Play()
-        end)
+        end
+
+        function Ret:UpdateToggle(T) ToggleSet(T) end
+        function Ret:UpdateTitle(newTitle) Title.Text = newTitle end
+        
+        ToggleMain.MouseButton1Click:Connect(ToggleSet)
 
         ToggleMain.MouseEnter:Connect(function()
             EnterTween:Play()
@@ -76,6 +82,8 @@ local function UiElements(Section)
 
         SectionalY = SectionalY + 20
         Section.Size = Section.Size + UDim2_fromOffset(0, 20)
+
+        return Ret
     end
     function Ret:Dropdown(Name, Default, List, Callback)
         local DropdownFrame = Instance_new('Frame')
@@ -119,11 +127,13 @@ local function UiElements(Section)
         Drop.Visible = false
         Drop.Parent = DropdownFrame
 
+        local Ret = {}
         local InstancedButtons = {}
         local DropToggle = false
 
         local function UpdateDropdown(List)
             for i,v in pairs(InstancedButtons) do v:Destroy() end
+            InstancedButtons = {}
 
             local x = 0
             local LastSelected = nil
@@ -188,6 +198,10 @@ local function UiElements(Section)
             
                 table.insert(InstancedButtons, Button)
             end
+
+            if DropToggle then
+                Drop.Size = UDim2_fromOffset(170, math.min(x*20, 200))
+            end
             Drop.CanvasSize = UDim2_fromOffset(0, x*20)
         end
 
@@ -205,15 +219,20 @@ local function UiElements(Section)
 
         DropButton.MouseButton1Click:Connect(function()
             DropToggle = not DropToggle
-            Drop:TweenSize(UDim2_fromOffset(170, DropToggle and 200 or 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quint, 0.2, true)
+            Drop:TweenSize(UDim2_fromOffset(170, DropToggle and math.min(#InstancedButtons*20, 200) or 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quint, 0.2, true)
             task.wait(DropToggle and 0 or 0.1)
             Drop.Visible = DropToggle
         end)
         
         UpdateDropdown(List)
+        
+        function Ret:UpdateList(newList) UpdateDropdown(newList) end
+        function Ret:UpdateTitle(newTitle) Title.Text = newTitle end
 
         SectionalY = SectionalY + 40
         Section.Size = Section.Size + UDim2_fromOffset(0, 40)
+
+        return Ret
     end
     function Ret:Slider(Name, Min, Max, Def, Callback, noFill, FloorCallback)
         local SliderFrame = Instance_new('Frame')
@@ -249,10 +268,12 @@ local function UiElements(Section)
         Slider.Size = UDim2_fromOffset(200, 10)
         Slider.Parent = SliderFrame
 
+        local Ret = {}
         local Range = Max - Min
         local clamp = math.clamp
         local format = string.format
         local floor = math.floor
+        local SlideValue = Def
 
         local thing = (Def - Min) / Range * SliderBounds.AbsoluteSize.X
         Slider.Size = UDim2_fromOffset(noFill and 2 or thing, 10)
@@ -264,7 +285,7 @@ local function UiElements(Section)
                 local Size = SliderBounds.AbsoluteSize.X
 
                 local Ratio = (Mouse.X - Position) / Size
-                local Value = (Ratio * Range) + Min
+                local Value = (Ratio * Range) + Min; SlideValue = Value
                 Title.Text = format('<font color="rgb(200, 200, 200)">%s</font> <font color="rgb(40, 40, 40)"> | </font> %s', Name, floor(Value))
 
                 Callback(FloorCallback and floor(Value) or Value)
@@ -279,7 +300,7 @@ local function UiElements(Section)
 
                 local MouseMove = Mouse.Move:Connect(function()
                     local Ratio = clamp((Mouse.X - Position) / Size, 0, 1)
-                    local Value = (Ratio * Range) + Min
+                    local Value = (Ratio * Range) + Min; SlideValue = Value
 
                     Callback(FloorCallback and floor(Value) or Value)
 
@@ -303,8 +324,65 @@ local function UiElements(Section)
             end
         end)
 
+        function Ret:UpdateValue(newValue)
+            assert(clamp(newValue, Min, Max) == newValue, 'Value is not in range')
+
+            local Size = SliderBounds.AbsoluteSize.X
+            local Ratio = (newValue - Min) / Range
+            SlideValue = newValue
+            Title.Text = format('<font color="rgb(200, 200, 200)">%s</font> <font color="rgb(40, 40, 40)"> | </font> %s', Name, newValue)
+
+            Slider:TweenSizeAndPosition(
+                UDim2_fromOffset(noFill and 2 or Ratio * Size, 10),
+                UDim2_fromOffset(noFill and Ratio * Size or 0, 20),
+                Enum.EasingDirection.Out,
+                Enum.EasingStyle.Quint,
+                0.1,
+                true
+            )
+        end
+        function Ret:UpdateMin(newMin)
+            assert(newMin < Max, 'Min is greater than max')
+
+            Min = newMin
+            Range = Max - Min
+            local Size = SliderBounds.AbsoluteSize.X
+            local Ratio = (SlideValue - Min) / Range
+
+            Slider:TweenSizeAndPosition(
+                UDim2_fromOffset(noFill and 2 or Ratio * Size, 10),
+                UDim2_fromOffset(noFill and Ratio * Size or 0, 20),
+                Enum.EasingDirection.Out,
+                Enum.EasingStyle.Quint,
+                0.1,
+                true
+            )
+        end
+        function Ret:UpdateMax(newMax)
+            assert(newMax > Min, 'Max is less than min')
+
+            Max = newMax
+            Range = Max - Min
+            local Size = SliderBounds.AbsoluteSize.X
+            local Ratio = (SlideValue - Min) / Range
+
+            Slider:TweenSizeAndPosition(
+                UDim2_fromOffset(noFill and 2 or Ratio * Size, 10),
+                UDim2_fromOffset(noFill and Ratio * Size or 0, 20),
+                Enum.EasingDirection.Out,
+                Enum.EasingStyle.Quint,
+                0.1,
+                true
+            )
+        end
+        function Ret:UpdateTitle(newTitle) 
+            Title.Text = format('<font color="rgb(200, 200, 200)">%s</font> <font color="rgb(40, 40, 40)"> | </font> %s', newTitle, SlideValue)
+        end
+
         SectionalY = SectionalY + 35
         Section.Size = Section.Size + UDim2_fromOffset(0, 35)
+
+        return Ret
     end
     function Ret:Colorpicker(Name, Def, Callback)
         local Main = Instance_new("TextButton")
@@ -498,6 +576,7 @@ local function UiElements(Section)
 
         local ColorTrack = Def or fromRGB(255, 255, 255)
 
+        local Ret = {}
         local V2N = Vector2.new
         local clamp = math.clamp
         local floor = math.floor
@@ -632,8 +711,13 @@ local function UiElements(Section)
             }):Play()
         end)
 
+        function Ret:UpdateColor(newColor) UpdateColor(newColor); StatusColor.BackgroundColor3 = newColor end
+        function Ret:UpdateTitle(newTitle) Title.Text = newTitle end
+
         SectionalY = SectionalY + 20
         Section.Size = Section.Size + UDim2_fromOffset(0, 20)
+
+        return Ret
     end
     function Ret:Keybind(Name, DefaultKey, setCallback, InputCallback)
         local Keybind = Instance_new('TextButton')
@@ -667,10 +751,12 @@ local function UiElements(Section)
         CurrentKey.TextXAlignment = Enum.TextXAlignment.Right
         CurrentKey.Parent = Keybind
 
+        local Ret = {}
         local KeyTrack = DefaultKey
+        local MouseInputs = {Enum.UserInputType.MouseButton1, Enum.UserInputType.MouseButton2, Enum.UserInputType.MouseButton3}
 
         UserInputService.InputBegan:Connect(function(input, gp)
-            if input.KeyCode == KeyTrack and not gp then
+            if (input.KeyCode == KeyTrack or input.UserInputType == KeyTrack) and not gp then
                 InputCallback()
             end
         end)
@@ -682,6 +768,11 @@ local function UiElements(Section)
                     KeyTrack = input.KeyCode
                     setCallback(input.KeyCode)
                     CurrentKey.Text = string.format('[%s]', string.split(tostring(input.KeyCode), '.')[3])
+                    InputBegan:Disconnect()
+                elseif table.find(MouseInputs, input.UserInputType) and not gp then
+                    KeyTrack = input.UserInputType
+                    setCallback(input.UserInputType)
+                    CurrentKey.Text = string.format('[%s]', string.split(tostring(input.UserInputType), '.')[3])
                     InputBegan:Disconnect()
                 end
             end)
@@ -699,8 +790,59 @@ local function UiElements(Section)
             })
         end)
 
+        function Ret:UpdateBind(newBind)
+            KeyTrack = newBind
+            CurrentKey.Text = string.format('[%s]', string.split(tostring(newBind), '.')[3])
+        end
+        function Ret:UpdateTitle(newTitle) Title.Text = newTitle end 
+
         SectionalY = SectionalY + 15
         Section.Size = Section.Size + UDim2_fromOffset(0, 15)
+
+        return Ret
+    end
+    function Ret:UserInput(Name, Default, Callback)
+        local Main = Instance_new('Frame')
+        local Title = Instance_new('TextLabel')
+        local InputBox = Instance_new('TextBox')
+
+        Main.BackgroundColor3 = fromRGB(17, 17, 17)
+        Main.BorderColor3 = fromRGB(17, 17, 17)
+        Main.Position = UDim2_fromOffset(13, SectionalY)
+        Main.Size = UDim2_fromOffset(200, 20)
+        Main.Parent = Section
+
+        Title.BackgroundTransparency = 1
+        Title.Size = UDim2_fromOffset(75, 20)
+        Title.Font = Enum.Font.SourceSans
+        Title.TextColor3 = fromRGB(200, 200, 200)
+        Title.Text = Name
+        Title.TextSize = 14
+        Title.TextXAlignment = Enum.TextXAlignment.Left
+        Title.Parent = Main
+
+        InputBox.BackgroundColor3 = fromRGB(17, 17, 17)
+        InputBox.BorderColor3 = fromRGB(40, 40, 40)
+        InputBox.Position = UDim2_fromOffset(85, 3)
+        InputBox.Size = UDim2_fromOffset(115, 15)
+        InputBox.ClearTextOnFocus = false
+        InputBox.Font = Enum.Font.SourceSans
+        InputBox.Text = Default
+        InputBox.TextColor3 = Colorscheme
+        InputBox.TextScaled = true
+        InputBox.Parent = Main
+
+        local Ret = {}
+
+        InputBox:GetPropertyChangedSignal('Text'):Connect(function()
+            Callback(InputBox.Text)
+        end)
+
+        function Ret:UpdateTitle(newTitle) Title.Text = newTitle end
+        function Ret:UpdateInput(newInput) InputBox.Text = newInput end
+
+        SectionalY = SectionalY + 20
+        Section.Size = Section.Size + UDim2_fromOffset(0, 20)
     end
     function Ret:Button(Name, Callback)
         local Button = Instance_new('TextButton')
@@ -716,6 +858,8 @@ local function UiElements(Section)
         Button.TextSize = 14
         Button.TextXAlignment = Enum.TextXAlignment.Left
         Button.Parent = Section
+
+        local Ret = {}
 
         Button.MouseButton1Click:Connect(Callback)
 
@@ -733,8 +877,12 @@ local function UiElements(Section)
             }):Play() 
         end)
 
+        function Ret:UpdateTitle(newTitle) Button.Text = newTitle end
+
         SectionalY = SectionalY + 20
         Section.Size = Section.Size + UDim2_fromOffset(0, 20)
+
+        return Ret
     end
 
     return Ret
@@ -751,7 +899,6 @@ local function Section(Tab)
         local SX = RL == 'R' and 250 or 10
         for i=(Section and table.find(Sectional, Section)+1 or 1), #Sectional do
             local CurrentSection = Sectional[i]
-            print(i, CurrentSection)
             CurrentSection.Position = UDim2_fromOffset(SX, LastY)
             LastY = LastY + CurrentSection.AbsoluteSize.Y + SectionSpace
         end
@@ -965,6 +1112,7 @@ function UiLib:CreateWindow(Name, Game, ColorScheme)
     CurrentTime.TextXAlignment = Enum.TextXAlignment.Left
     CurrentTime.Parent = StatusFrame
 
+    local WindowReturn = {VisiblityKey = Enum.KeyCode.BackSlash}
     local StatusLength = CurrentTime.Position.X.Offset + CurrentTime.AbsoluteSize.X
     local VisiblityToggle = true
     --local LoadTime = os.time()
@@ -986,7 +1134,7 @@ function UiLib:CreateWindow(Name, Game, ColorScheme)
     end)
 
     UserInputService.InputBegan:Connect(function(input, gp)
-        if input.KeyCode == KeybindClose and not gp then
+        if input.KeyCode == WindowReturn.VisiblityKey and not gp then
             VisiblityToggle = not VisiblityToggle
             
             MainFrame.Visible = VisiblityToggle
@@ -1014,44 +1162,55 @@ function UiLib:CreateWindow(Name, Game, ColorScheme)
         end
     end)
 
-    return Tab(MainFrame)
+    return Tab(MainFrame), WindowReturn
 end
 
 return UiLib
 
---[[local Window = UiLib:CreateWindow('<font color="rgb(0, 0, 255)">FH</font> v3', 'test')
+--[[
+local Window = UiLib:CreateWindow('<font color="rgb(0, 0, 255)">FH</font> v3', 'test', Color3.fromRGB(255, 50, 150))
 local tab1 = Window:Tab('test1')
 local tab2 = Window:Tab('a')
 local Section1 = tab1:Section('test')
 local Section2 = tab1:Section('a')
 local Section3 = tab2:Section('Rage')
 
-Section1:Toggle('test', false, function(a)
+local Toggle = Section1:Toggle('test', false, function(a)
     print(a)
 end)
 Section1:Toggle('fh winning?', true, function() end)
-Section1:Dropdown('test', 'default', {'ab', 'ac'}, function(a) 
+local Dropdown = Section1:Dropdown('test', 'default', {'ab', 'ac'}, function(a) 
       print(a) 
 end)
 Section1:Slider('yooo', -50, 50, 0, function(v) 
       print(v) 
 end)
-Section1:Slider('yooo', -50, 50, 0, function(v) 
+local Slider = Section1:Slider('yooo', -50, 50, 0, function(v) 
       print(v) 
 end, true)
-Section1:Colorpicker('Colorpicker', Color3.fromRGB(0, 0, 255), function(a)
+local Colorthing = Section1:Colorpicker('Colorpicker', Color3.fromRGB(0, 0, 255), function(a)
       print(a)
 end)
-Section1:Button('what', function()
+local Button = Section1:Button('what', function()
       print('ok buton') 
 end)
-Section1:Keybind('Keybind', nil, function(a)
+local Keybind = Section1:Keybind('Keybind', nil, function(a)
       print('Set to: ', a) 
 end, function() 
       print('tess') 
 end)
+local Userint = Section1:UserInput('User input', 'def', function(a) print(a) end)
 
-Section3:Toggle('Enabled', false, function() end)
-Section3:Toggle('funny', true, function() end)
-Section3:Toggle('Autowall', true, function() end)
-Section3:Slider('Min Damage', 1, 100, 100, function() end)]]
+Toggle:UpdateToggle(true)
+Toggle:UpdateTitle('UpdatedTitle')
+Dropdown:UpdateList({'new', 'list'})
+Dropdown:UpdateTitle('New title')
+Slider:UpdateMin(0)
+Slider:UpdateMax(100)
+Slider:UpdateValue(25)
+Slider:UpdateTitle('teat325251')
+Colorthing:UpdateColor(Color3.fromRGB(0, 255, 0))
+Colorthing:UpdateTitle('etate')
+Button:UpdateTitle('button new thing')
+Keybind:UpdateTitle('etate')
+Keybind:UpdateBind(Enum.KeyCode.Tab)]]
