@@ -3,6 +3,7 @@ if getgenv().fah then
 end
 
 local UserInputService = game:GetService('UserInputService')
+local HttpService = game:GetService('HttpService')
 local TweenService = game:GetService('TweenService')
 local Mouse = game.Players.LocalPlayer:GetMouse()
 
@@ -19,7 +20,7 @@ local SectionSpace = 10
 local UiLib = {}
 local Tabs = {}
 
-local function UiElements(Section)
+local function UiElements(Section, SectionTable)
     local Ret = {}
     local SectionalY = 15
  
@@ -52,19 +53,18 @@ local function UiElements(Section)
         Status.Size = UDim2_fromOffset(15, 15)
         Status.Parent = ToggleMain
 
-        local Toggle = Default
-        local Ret = {}
+        local Ret = {Type = 'Toggle', Toggle = Default}
         local EnterTween = TweenService:Create(Title, TweenInfo.new(0.2), {TextColor3 = fromRGB(200, 200, 200)})
 
         local function ToggleSet(set)
-            Toggle = set or not Toggle
-            Callback(Toggle)
+            Ret.Toggle = set or not Ret.Toggle
+            Callback(Ret.Toggle)
 
             TweenService:Create(Status, TweenInfo.new(0.2), {
-                BackgroundColor3 = (Toggle and Colorscheme or fromRGB(22, 22, 22))
+                BackgroundColor3 = (Ret.Toggle and Colorscheme or fromRGB(22, 22, 22))
             }):Play()
             TweenService:Create(Title, TweenInfo.new(0.2), {
-                TextColor3 = (Toggle and fromRGB(225, 225, 225) or fromRGB(150, 150, 150))
+                TextColor3 = (Ret.Toggle and fromRGB(225, 225, 225) or fromRGB(150, 150, 150))
             }):Play()
         end
 
@@ -79,6 +79,8 @@ local function UiElements(Section)
         ToggleMain.MouseLeave:Connect(function()
             TweenService:Create(Title, TweenInfo.new(0.2), {TextColor3 = Toggle and fromRGB(225, 225, 225) or fromRGB(150, 150, 150)}):Play()
         end)
+
+        SectionTable[Name] = Ret
 
         SectionalY = SectionalY + 20
         Section.Size = Section.Size + UDim2_fromOffset(0, 20)
@@ -127,7 +129,7 @@ local function UiElements(Section)
         Drop.Visible = false
         Drop.Parent = DropdownFrame
 
-        local Ret = {}
+        local Ret = {Type = 'Dropdown', Selected = Default}
         local InstancedButtons = {}
         local DropToggle = false
 
@@ -165,6 +167,7 @@ local function UiElements(Section)
                     Callback(v)
                     DropButton.Text = tostring(v)
                     LastSelected = Button
+                    Ret.Selected = v
                     if LastSelected then
                         TweenService:Create(LastSelected:FindFirstChild('TextLabel'), TweenInfo.new(0.2), {
                             TextColor3 = fromRGB(175, 175, 175)
@@ -228,6 +231,12 @@ local function UiElements(Section)
         
         function Ret:UpdateList(newList) UpdateDropdown(newList) end
         function Ret:UpdateTitle(newTitle) Title.Text = newTitle end
+        function Ret:UpdateSelected(newSelected) 
+            DropButton.Text = tostring(newSelected)
+            Callback(newSelected)
+        end
+
+        SectionTable[Name] = Ret
 
         SectionalY = SectionalY + 40
         Section.Size = Section.Size + UDim2_fromOffset(0, 40)
@@ -268,7 +277,7 @@ local function UiElements(Section)
         Slider.Size = UDim2_fromOffset(200, 10)
         Slider.Parent = SliderFrame
 
-        local Ret = {}
+        local Ret = {Type = 'Slider', SlideValue = Def}
         local Range = Max - Min
         local clamp = math.clamp
         local format = string.format
@@ -285,7 +294,7 @@ local function UiElements(Section)
                 local Size = SliderBounds.AbsoluteSize.X
 
                 local Ratio = (Mouse.X - Position) / Size
-                local Value = (Ratio * Range) + Min; SlideValue = Value
+                local Value = (Ratio * Range) + Min; Ret.SlideValue = Value
                 Title.Text = format('<font color="rgb(200, 200, 200)">%s</font> <font color="rgb(40, 40, 40)"> | </font> %s', Name, floor(Value))
 
                 Callback(FloorCallback and floor(Value) or Value)
@@ -327,9 +336,11 @@ local function UiElements(Section)
         function Ret:UpdateValue(newValue)
             assert(clamp(newValue, Min, Max) == newValue, 'Value is not in range')
 
+            Callback(newValue)
+
             local Size = SliderBounds.AbsoluteSize.X
             local Ratio = (newValue - Min) / Range
-            SlideValue = newValue
+            Ret.SlideValue = newValue
             Title.Text = format('<font color="rgb(200, 200, 200)">%s</font> <font color="rgb(40, 40, 40)"> | </font> %s', Name, newValue)
 
             Slider:TweenSizeAndPosition(
@@ -347,7 +358,7 @@ local function UiElements(Section)
             Min = newMin
             Range = Max - Min
             local Size = SliderBounds.AbsoluteSize.X
-            local Ratio = (SlideValue - Min) / Range
+            local Ratio = (Ret.SlideValue - Min) / Range
 
             Slider:TweenSizeAndPosition(
                 UDim2_fromOffset(noFill and 2 or Ratio * Size, 10),
@@ -364,7 +375,7 @@ local function UiElements(Section)
             Max = newMax
             Range = Max - Min
             local Size = SliderBounds.AbsoluteSize.X
-            local Ratio = (SlideValue - Min) / Range
+            local Ratio = (Ret.SlideValue - Min) / Range
 
             Slider:TweenSizeAndPosition(
                 UDim2_fromOffset(noFill and 2 or Ratio * Size, 10),
@@ -378,6 +389,8 @@ local function UiElements(Section)
         function Ret:UpdateTitle(newTitle) 
             Title.Text = format('<font color="rgb(200, 200, 200)">%s</font> <font color="rgb(40, 40, 40)"> | </font> %s', newTitle, SlideValue)
         end
+
+        SectionTable[Name] = Ret
 
         SectionalY = SectionalY + 35
         Section.Size = Section.Size + UDim2_fromOffset(0, 35)
@@ -574,9 +587,11 @@ local function UiElements(Section)
 
         C:Destroy()
 
-        local ColorTrack = Def or fromRGB(255, 255, 255)
-
-        local Ret = {}
+        local Ret = {Type = 'Colorpicker', ColorTrack = Def or fromRGB(255, 255, 255), ColorTable = {
+            R = Def and Def.R or 255,
+            G = Def and Def.G or 255,
+            B = Def and Def.B or 255
+        }}
         local V2N = Vector2.new
         local clamp = math.clamp
         local floor = math.floor
@@ -686,7 +701,12 @@ local function UiElements(Section)
             local newColor = ChosenColor.BackgroundColor3
             Callback(newColor)
             StatusColor.BackgroundColor3 = newColor
-            ColorTrack = newColor
+            Ret.ColorTrack = newColor
+            Ret.ColorTable = {
+                R = newColor.R,
+                G = newColor.G,
+                B = newColor.B
+            }
             Colorpicker.Visible = false
         end)
 
@@ -711,8 +731,18 @@ local function UiElements(Section)
             }):Play()
         end)
 
-        function Ret:UpdateColor(newColor) UpdateColor(newColor); StatusColor.BackgroundColor3 = newColor end
+        function Ret:UpdateColor(newColor)
+            UpdateColor(newColor)
+            StatusColor.BackgroundColor3 = newColor 
+            Ret.ColorTable = {
+                R = newColor.R,
+                G = newColor.G,
+                B = newColor.B
+            }
+        end
         function Ret:UpdateTitle(newTitle) Title.Text = newTitle end
+
+        SectionTable[Name] = Ret
 
         SectionalY = SectionalY + 20
         Section.Size = Section.Size + UDim2_fromOffset(0, 20)
@@ -751,12 +781,12 @@ local function UiElements(Section)
         CurrentKey.TextXAlignment = Enum.TextXAlignment.Right
         CurrentKey.Parent = Keybind
 
-        local Ret = {}
+        local Ret = {Type = 'Keybind', KeyTrack = DefaultKey, KeyStr = tostring(DefaultKey)}
         local KeyTrack = DefaultKey
         local MouseInputs = {Enum.UserInputType.MouseButton1, Enum.UserInputType.MouseButton2, Enum.UserInputType.MouseButton3}
 
         UserInputService.InputBegan:Connect(function(input, gp)
-            if (input.KeyCode == KeyTrack or input.UserInputType == KeyTrack) and not gp then
+            if (input.KeyCode == Ret.KeyTrack or input.UserInputType == Ret.KeyTrack) and not gp then
                 InputCallback()
             end
         end)
@@ -765,12 +795,14 @@ local function UiElements(Section)
             local InputBegan = nil
             InputBegan = UserInputService.InputBegan:Connect(function(input, gp)
                 if input.UserInputType == Enum.UserInputType.Keyboard and not gp then
-                    KeyTrack = input.KeyCode
+                    Ret.KeyTrack = input.KeyCode
+                    Ret.KeyStr = tostring(input.KeyCode)
                     setCallback(input.KeyCode)
                     CurrentKey.Text = string.format('[%s]', string.split(tostring(input.KeyCode), '.')[3])
                     InputBegan:Disconnect()
                 elseif table.find(MouseInputs, input.UserInputType) and not gp then
-                    KeyTrack = input.UserInputType
+                    Ret.KeyTrack = input.UserInputType
+                    Ret.KeyStr = tostring(input.UserInputType)
                     setCallback(input.UserInputType)
                     CurrentKey.Text = string.format('[%s]', string.split(tostring(input.UserInputType), '.')[3])
                     InputBegan:Disconnect()
@@ -791,10 +823,14 @@ local function UiElements(Section)
         end)
 
         function Ret:UpdateBind(newBind)
-            KeyTrack = newBind
+            Ret.KeyTrack = newBind
+            Ret.KeyStr = tostring(newBind)
+            setCallback(newBind)
             CurrentKey.Text = string.format('[%s]', string.split(tostring(newBind), '.')[3])
         end
         function Ret:UpdateTitle(newTitle) Title.Text = newTitle end 
+
+        SectionTable[Name] = Ret
 
         SectionalY = SectionalY + 15
         Section.Size = Section.Size + UDim2_fromOffset(0, 15)
@@ -832,14 +868,21 @@ local function UiElements(Section)
         InputBox.TextScaled = true
         InputBox.Parent = Main
 
-        local Ret = {}
+        local Ret = {Type = 'UserInput', CurrentInput = Default}
 
         InputBox:GetPropertyChangedSignal('Text'):Connect(function()
+            Ret.CurrentInput = InputBox.Text
             Callback(InputBox.Text)
         end)
 
         function Ret:UpdateTitle(newTitle) Title.Text = newTitle end
-        function Ret:UpdateInput(newInput) InputBox.Text = newInput end
+        function Ret:UpdateInput(newInput) 
+            InputBox.Text = newInput; 
+            Ret.CurrentInput = newInput
+            Callback(newInput)
+        end
+
+        SectionTable[Name] = Ret
 
         SectionalY = SectionalY + 20
         Section.Size = Section.Size + UDim2_fromOffset(0, 20)
@@ -888,7 +931,7 @@ local function UiElements(Section)
     return Ret
 end
 
-local function Section(Tab)
+local function Section(Tab, TabTable)
     local Ret = {}
     local R, L = {}, {}
     local RLToggle = false
@@ -940,6 +983,9 @@ local function Section(Tab)
         BorderHide.Size = UDim2_fromOffset(Title.TextBounds.X + 10, 1)
         BorderHide.Parent = Section
 
+        local SectionTable = {}
+        TabTable[Name] = SectionTable
+
         local Sectional = RLToggle and 'R' or 'L'
 
         Section:GetPropertyChangedSignal('Size'):Connect(function()
@@ -950,86 +996,76 @@ local function Section(Tab)
         table.insert(RLToggle and R or L, Section); UpdatePositions(Sectional)
         RLToggle = not RLToggle
 
-        return UiElements(Section)
+        return UiElements(Section, SectionTable)
     end
     
     return Ret
 end
 
-local function Tab(Window)
-    local Ret = {} 
-    
-    function Ret:Tab(Name)
-        local TabFrame = Instance_new('ScrollingFrame')
-        local TabButton = Instance_new('TextButton')
-        local BorderHide = Instance_new('Frame')
+local function Tab(Window, Name, TabTable)
+    local TabFrame = Instance_new('ScrollingFrame')
+    local TabButton = Instance_new('TextButton')
+    local BorderHide = Instance_new('Frame')
 
-        TabFrame.BackgroundColor3 = fromRGB(20, 20, 20)
-        TabFrame.BorderColor3 = fromRGB(40, 40, 40)
-        TabFrame.Position = UDim2_fromOffset(10, 55)
-        TabFrame.Size = UDim2_fromOffset(480, 385)
-        TabFrame.Visible = false
-        TabFrame.ScrollBarThickness = 2
-        TabFrame.ScrollBarImageColor3 = Colorscheme
-        TabFrame.Parent = Window
+    TabFrame.BackgroundColor3 = fromRGB(20, 20, 20)
+    TabFrame.BorderColor3 = fromRGB(40, 40, 40)
+    TabFrame.Position = UDim2_fromOffset(10, 55)
+    TabFrame.Size = UDim2_fromOffset(480, 385)
+    TabFrame.Visible = false
+    TabFrame.ScrollBarThickness = 2
+    TabFrame.ScrollBarImageColor3 = Colorscheme
+    TabFrame.Parent = Window
 
-        TabButton.AutoButtonColor = false
-        TabButton.BackgroundColor3 = fromRGB(22, 22, 22)
-        TabButton.BorderColor3 = fromRGB(22, 22, 22)
-        TabButton.Position = UDim2_fromOffset(11 + 71 * #Tabs, 33)
-        TabButton.Size = UDim2_fromOffset(70, 20)
-        TabButton.Font = Enum.Font.SourceSansSemibold
-        TabButton.TextColor3 = fromRGB(225, 225, 225)
-        TabButton.Text = Name
-        TabButton.TextSize = 14
-        TabButton.Parent = Window
+    TabButton.AutoButtonColor = false
+    TabButton.BackgroundColor3 = fromRGB(22, 22, 22)
+    TabButton.BorderColor3 = fromRGB(22, 22, 22)
+    TabButton.Position = UDim2_fromOffset(11 + 71 * #Tabs, 33)
+    TabButton.Size = UDim2_fromOffset(70, 20)
+    TabButton.Font = Enum.Font.SourceSansSemibold
+    TabButton.TextColor3 = fromRGB(225, 225, 225)
+    TabButton.Text = Name
+    TabButton.TextSize = 14
+    TabButton.Parent = Window
 
-        BorderHide.BackgroundColor3 = fromRGB(20, 20, 20)
-        BorderHide.BorderSizePixel = 0
-        BorderHide.Position = UDim2_fromOffset(-1, 21)
-        BorderHide.Size = UDim2_fromOffset(70, 1)
-        BorderHide.Visible = false
-        BorderHide.Parent = TabButton
+    BorderHide.BackgroundColor3 = fromRGB(20, 20, 20)
+    BorderHide.BorderSizePixel = 0
+    BorderHide.Position = UDim2_fromOffset(-1, 21)
+    BorderHide.Size = UDim2_fromOffset(70, 1)
+    BorderHide.Visible = false
+    BorderHide.Parent = TabButton
 
-        if #Tabs < 1 then
-            TabFrame.Visible = true
-            TabButton.BackgroundColor3 = fromRGB(20, 20, 20)
-            TabButton.BorderColor3 = fromRGB(20, 20, 20)
-            TabButton.TextColor3 = Colorscheme
-            BorderHide.Visible = true
+    if #Tabs < 1 then
+        TabFrame.Visible = true
+        TabButton.BackgroundColor3 = fromRGB(20, 20, 20)
+        TabButton.BorderColor3 = fromRGB(20, 20, 20)
+        TabButton.TextColor3 = Colorscheme
+        BorderHide.Visible = true
+    end
+
+    TabButton.MouseButton1Click:Connect(function()
+        for i,v in pairs(Tabs) do
+            local B = v.Button
+            v.Tab.Visible = false
+            B.BackgroundColor3 = fromRGB(22, 22, 22)
+            B.BorderColor3 = fromRGB(22, 22, 22)
+            B.TextColor3 = fromRGB(225, 225, 225)
+            v.BorderHide.Visible = false
         end
 
-        TabButton.MouseButton1Click:Connect(function()
-            for i,v in pairs(Tabs) do
-                local B = v.Button
-                v.Tab.Visible = false
-                B.BackgroundColor3 = fromRGB(22, 22, 22)
-                B.BorderColor3 = fromRGB(22, 22, 22)
-                B.TextColor3 = fromRGB(225, 225, 225)
-                v.BorderHide.Visible = false
-            end
+        TabFrame.Visible = true
+        TabButton.BackgroundColor3 = fromRGB(20, 20, 20)
+        TabButton.BorderColor3 = fromRGB(20, 20, 20)
+        TabButton.TextColor3 = Colorscheme
+        BorderHide.Visible = true
+    end)
 
-            TabFrame.Visible = true
-            TabButton.BackgroundColor3 = fromRGB(20, 20, 20)
-            TabButton.BorderColor3 = fromRGB(20, 20, 20)
-            TabButton.TextColor3 = Colorscheme
-            BorderHide.Visible = true
-        end)
+    table.insert(Tabs, {
+        Tab = TabFrame,
+        Button = TabButton,
+        BorderHide = BorderHide
+    })
 
-        table.insert(Tabs, {
-            Tab = TabFrame,
-            Button = TabButton,
-            BorderHide = BorderHide
-        })
-
-        return Section(TabFrame)
-    end
-
-    function Ret:SetKeybindClose(Keycode) 
-        KeybindClose = Keycode;
-    end
-
-    return Ret
+    return Section(TabFrame, TabTable)
 end
 
 function UiLib:CreateWindow(Name, Game, ColorScheme)
@@ -1112,7 +1148,10 @@ function UiLib:CreateWindow(Name, Game, ColorScheme)
     CurrentTime.TextXAlignment = Enum.TextXAlignment.Left
     CurrentTime.Parent = StatusFrame
 
-    local WindowReturn = {VisiblityKey = Enum.KeyCode.BackSlash}
+    local WindowReturn = {
+        VisiblityKey = Enum.KeyCode.BackSlash,
+        Tabs = {}
+    }
     local StatusLength = CurrentTime.Position.X.Offset + CurrentTime.AbsoluteSize.X
     local VisiblityToggle = true
     --local LoadTime = os.time()
@@ -1162,13 +1201,46 @@ function UiLib:CreateWindow(Name, Game, ColorScheme)
         end
     end)
 
-    return Tab(MainFrame), WindowReturn
+    function WindowReturn:Tab(Name)
+        WindowReturn.Tabs[Name] = {}
+        return Tab(MainFrame, Name, WindowReturn.Tabs[Name])
+    end
+
+    function WindowReturn:GenerateConfig()
+        return HttpService:JSONEncode(WindowReturn.Tabs)
+    end
+
+    function WindowReturn:LoadConfig(ConfigJSON)
+        local Config = HttpService:JSONDecode(ConfigJSON)
+
+        for i,v in pairs(WindowReturn.Tabs) do
+            local Tab = Config[i]
+            for x,d in pairs(v) do
+                local Section = Tab[x]
+                for i,v in pairs(d) do
+                    local Element = Section[i]
+                    if v.Type == 'Toggle' then print(i, 'set', Element.Toggle)v:UpdateToggle(Element.Toggle)
+                    elseif v.Type == 'Dropdown' then print(i, 'set', Element.Selected)v:UpdateSelected(Element.Selected)
+                    elseif v.Type == 'Slider' then v:UpdateValue(Element.SlideValue)
+                    elseif v.Type == 'Colorpicker' then local ColorTable = Element.ColorTable; v:UpdateColor(Color3.new(ColorTable.R, ColorTable.G, ColorTable.B))
+                    elseif v.Type == 'Keybind' then local KeySplit = string.split(Element.KeyStr, '.'); v:UpdateBind(Enum[KeySplit[2]][KeySplit[3]])
+                    elseif v.Type == 'UserInput' then v:UpdateInput(Element.CurrentInput)
+                    end
+                end
+            end
+        end
+    end
+
+    function WindowReturn:SetKeybindClose(Keycode) 
+        WindowReturn.VisiblityKey = Keycode;
+    end
+
+    return WindowReturn
 end
 
 return UiLib
 
---[[
-local Window = UiLib:CreateWindow('<font color="rgb(0, 0, 255)">FH</font> v3', 'test', Color3.fromRGB(255, 50, 150))
+--[[local Window = UiLib:CreateWindow('<font color="rgb(0, 0, 255)">FH</font> v3', 'test', Color3.fromRGB(255, 50, 150))
 local tab1 = Window:Tab('test1')
 local tab2 = Window:Tab('a')
 local Section1 = tab1:Section('test')
@@ -1200,6 +1272,9 @@ end, function()
       print('tess') 
 end)
 local Userint = Section1:UserInput('User input', 'def', function(a) print(a) end)
+Section1:Button('Copy config', function()
+    setclipboard(Window:GenerateConfig())
+end)
 
 Toggle:UpdateToggle(true)
 Toggle:UpdateTitle('UpdatedTitle')
@@ -1213,4 +1288,7 @@ Colorthing:UpdateColor(Color3.fromRGB(0, 255, 0))
 Colorthing:UpdateTitle('etate')
 Button:UpdateTitle('button new thing')
 Keybind:UpdateTitle('etate')
-Keybind:UpdateBind(Enum.KeyCode.Tab)]]
+Keybind:UpdateBind(Enum.KeyCode.Tab)
+
+Window:LoadConfig('{"test1":{"test":{"User input":{"CurrentInput":"this is config","Type":"UserInput","UpdateInput":null,"UpdateTitle":null},"Colorpicker":{"Type":"Colorpicker","UpdateTitle":null,"ColorTrack":null,"ColorTable":{"R":1,"B":0.6857142448425293,"G":0},"UpdateColor":null},"fh winning?":{"Type":"Toggle","Toggle":true,"UpdateToggle":null,"UpdateTitle":null},"Keybind":{"KeyTrack":null,"KeyStr":"Enum.KeyCode.Equals","UpdateBind":null,"UpdateTitle":null,"Type":"Keybind"},"test":{"Type":"Dropdown","UpdateSelected":null,"Selected":"new","UpdateList":null,"UpdateTitle":null},"yooo":{"UpdateValue":null,"Type":"Slider","UpdateMax":null,"UpdateTitle":null,"SlideValue":35.5,"UpdateMin":null}},"a":[]},"a":{"Rage":[]}}')
+]]
