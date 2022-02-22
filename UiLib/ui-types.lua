@@ -22,5 +22,5 @@ type Main = {
 }
 
 type Section = { Section: (self: Section, name: string) -> Main }
-type Window = { Tab: (self: Window, name: string) -> Section, SetKeybindClose: (self: Window, KeyCode: Enum.KeyCode) -> nil }
+type Window = { Tab: (self: Window, name: string) -> Section, VisiblityKey: Enum.KeyCode }
 type Library = { CreateWindow: (self: Library, name: string, game: string, colorscheme: Color3?) -> Window }
