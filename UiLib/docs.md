@@ -5,6 +5,7 @@ UiLib:CreateWindow(<string name>, <string game>, <Color3 colorscheme>)
 Tab:
 ```lua
 Window:Tab(<string name>)
+Window:SetKeybindClose(<Enum.KeyCode KeyCode>)
 ```
 
 Section:
