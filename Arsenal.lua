@@ -62,8 +62,10 @@ local info = debug.info;
 local Delay = task.delay;
 local Tick = tick;
 local fromHSV = Color3.fromHSV;
+local Vector2 = Vector2.new;
 local MouseButton2 = Enum.UserInputType.MouseButton2;
 local Type = typeof;
+local Mouse = LocalPlayer:GetMouse();
 local Checkcaller = checkcaller;
 local Flags = {};
 local BackupIndex, BackupNewIndex;
@@ -140,6 +142,13 @@ BackupRot = hookfunction(RotCamera, function(...)
     return BackupRot(...);
 end);
 
+local FOV = Drawing.new("Circle");
+FOV.Visible = true;
+FOV.Thickness = 3;
+FOV.Radius = 200;
+FOV.Position = Vector2(Mouse.X, Mouse.Y);
+FOV.Color = fromHSV(0, 0.0, 1);
+
 local function GetClosestPlayer(novisible, maxdistance) 
     if not LocalPlayer.Character or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
 
@@ -178,6 +187,35 @@ local function GetClosestPlayer(novisible, maxdistance)
     return Players[1] and Players[1][2];
 end;
 
+local function GetClosestPlayerFromVector2(pos) 
+    if not LocalPlayer.Character or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
+
+    local Players = {};
+
+    for i,v in Pairs(GetChildren(GPlayers)) do
+        if v ~= LocalPlayer then
+            if Flags.TeamCheck and v.TeamColor == LocalPlayer.TeamColor then 
+                continue;
+            end;
+
+            local Character = v.Character;
+            local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
+
+            if HumanoidRootPart then
+                local Vector, Visible = WorldToViewportPoint(Camera, HumanoidRootPart.Position);
+                local Between = (Vector2(Vector.X, Vector.Y) - pos).magnitude;
+                if Visible and Between <= FOV.Radius then
+                    Players[#Players+1] = {Between, v};
+                end;
+            end;
+        end;
+    end;
+
+    sort(Players, function(x,y) return x[1] < y[1] end);
+
+    return Players[1] and Players[1][2];
+end;
+
 -- Legit
 do 
     local LegitTab = Window:Tab("Legit");
@@ -191,7 +229,7 @@ do
     RageBot:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.RageTarget = selected; end);
     RageBot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.RageBotMaxDistane = value; end);
 
-    local TriggerBot = LegitTab:Section("Trigger");
+    local TriggerBot = LegitTab:Section("Trigger Bot");
     TriggerBot:Toggle("Enabled", false, function(value) Flags.TriggerBot = value; end);    
     TriggerBot:Slider("Delay", 0, 10, 0, function(value) Flags.TriggerBotDelay = value end);
 
@@ -200,6 +238,13 @@ do
     Aimbot:Toggle("Visible Check", true, function(value) Flags.AimbotVisible = value; end);
     Aimbot:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.AimbotTarget = selected; end);
     Aimbot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.AimbotMaxDistance = value; end)
+
+    local SilentAim = LegitTab:Section("Silent Aim");
+    SilentAim:Toggle("Enabled", false, function(value) Flags.SilentAim = value; end);
+    SilentAim:Slider("FOV", 1, 2000, 200, function(value) FOV.Radius = value; end);
+    SilentAim:Slider("Circle Thickness", 1, 100, 3, function(value) FOV.Thickness = value; end);
+    SilentAim:Colorpicker("Circle Color", Color3.new(1, 1,1), function(value) FOV.Color = value; end);
+    SilentAim:Toggle("Rainbow", false, function(value) Flags.FOVCircleRainbow = value; end);
 
     local Weapon = LegitTab:Section("Weapon");
     Weapon:Toggle("Infinite Ammo", false, function(value) Flags.InfiniteAmmo = value; end);
@@ -263,7 +308,7 @@ do
     end);
     
     local Options = Misc:Section("Options");
-    Options:Keybind("UI Open", Enum.KeyCode.F5, function(Keybind) WindowOptions.VisiblityKey = Keybind; end, function() end);
+    Options:Keybind("UI Open", Enum.KeyCode.F5, function(Keybind) Window:SetKeybindClose(Keybind); end, function() end);
 
     for i,v in Pairs(GetChildren(GPlayers)) do
         if ModCheck.isMod(v) then
@@ -285,16 +330,46 @@ do
     ]]
 end;
 
+local BulletHandler, BackupHandler = GetFunction("firebullet");
+local BitBuffer = require(game.ReplicatedStorage.Modules.BitBuffer);
 
-local Mouse = LocalPlayer:GetMouse();
+BackupHandler = hookfunction(BulletHandler, function(...) 
+    if not Flags.SilentAim then return BackupHandler(...) end;
 
-game.Players.PlayerAdded:Connect(function(player) 
+    local MouseVector = Vector2(Mouse.X, Mouse.Y);
+    local Closest = GetClosestPlayerFromVector2(MouseVector);
+    if not Closest then return BackupHandler(...) end;
+
+    local Buffer = BitBuffer();
+    local ray = Ray.new(Camera.CoordinateFrame.p, (CFrame(Camera.CoordinateFrame.p, Camera.CoordinateFrame.p + (Camera.CoordinateFrame.lookVector * 999)) * CFrame()).lookVector.unit * Gun.Value.Range.Value);
+
+    -- whats the quickest way to kill yourself?
+    Buffer.writeString(Gun.Value.Name);
+    Buffer.writeUnsigned(2, 1);
+    Buffer.writeUnsigned(2, -0);
+    Buffer.writeInt8(3);
+    Buffer.writeFloat16(Tick());
+    Buffer.writeInt8(1);
+    Buffer.writeUnsigned(1, -0);
+    Buffer.writeUnsigned(1, -0);
+    Buffer.writeVector3(ray.Origin);
+    Buffer.writeVector3(Closest.Character.Head.Position);
+    game.ReplicatedStorage.Events["\226\128\139HitPart"]:FireServer(Closest.Character.Head, Buffer.dumpString(), "swaggg");
+
+    return BackupHandler(...);
+end);
+
+Mouse.Move:Connect(function() 
+    FOV.Position = Vector2(Mouse.X, Mouse.Y);
+end);
+
+GPlayers.PlayerAdded:Connect(function(player) 
     if Flags.ModCheck and ModCheck.isMod(player) then
         SynapseNotification("A moderator is in your game!", ToastType.Warning);
     end;
 end);
 
-game.RunService.RenderStepped:Connect(function() 
+Game.RunService.RenderStepped:Connect(function() 
     if equipped.Value == "none" then return end;
 
     if Flags.Aimbot and IsMouseButtonPressed(UserInputService, MouseButton2) then
@@ -355,6 +430,11 @@ game.RunService.RenderStepped:Connect(function()
                 v.Color = fromHSV(Hue, 1, 1);
             end;
         end;
+    end;
+
+    if Flags.FOVCircleRainbow then
+        local Hue = (Tick() / 5) % 1; -- fates esp coming in clutch
+        FOV.Color = fromHSV(Hue, 1, 1);
     end;
 
     if Flags.RapidFire and Gun.Value then
