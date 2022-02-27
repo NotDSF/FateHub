@@ -55,6 +55,7 @@ local IsDescendantOf = Game.IsDescendantOf;
 local IsA = Game.IsA;
 local Raycast = Workspace.Raycast;
 --local match = string.match;
+local HitRemote = game.ReplicatedStorage.Events["\226\128\139HitPart"];
 local RaycastParams = RaycastParams.new();
 local CFrame = CFrame.new;
 local sort = table.sort;
@@ -62,12 +63,21 @@ local info = debug.info;
 local Delay = task.delay;
 local Tick = tick;
 local fromHSV = Color3.fromHSV;
+local Color3 = Color3.new;
 local Vector2 = Vector2.new;
+local Vector3 = Vector3.new;
+local PointInstance = PointInstance.new;
+local RectDynamic = RectDynamic.new;
+local TextDynamic = TextDynamic.new;
+local format = string.format;
+local floor = math.floor;
 local MouseButton2 = Enum.UserInputType.MouseButton2;
 local Type = typeof;
 local Mouse = LocalPlayer:GetMouse();
 local Checkcaller = checkcaller;
-local Flags = {};
+local Hookmetamethod = hookmetamethod;
+local Hookfunction = hookfunction;
+local Flags, ESPObjects = {}, {};
 local BackupIndex, BackupNewIndex;
 
 local function GetLocal(index) 
@@ -84,12 +94,6 @@ local function GetFunction(name)
             return v;
         end;
     end;
-end;
-
-local format = string.format;
-local cprint = rconsoleprint;
-local function printf(...) 
-    return cprint(format(...) .. "\n");
 end;
 
 local function SynapseNotification(Content, Type) 
@@ -114,7 +118,7 @@ local equipped = Variables.equipped;
 local currentspread = GetLocal("currentspread").currentspread;
 local Gun = GetLocal("gun").gun;
 
-BackupIndex = hookmetamethod(Game, "__index", newcclosure(function(self, idx) 
+BackupIndex = Hookmetamethod(Game, "__index", newcclosure(function(self, idx) 
     if idx == "WalkSpeed" then
         return 16;
     elseif idx == "JumpPower" then
@@ -129,7 +133,7 @@ BackupIndex = hookmetamethod(Game, "__index", newcclosure(function(self, idx)
     return BackupIndex(self, idx);
 end));
 
-BackupNewIndex = hookmetamethod(Game, "__newindex", newcclosure(function(self, idx, val) 
+BackupNewIndex = Hookmetamethod(Game, "__newindex", newcclosure(function(self, idx, val) 
     if not Checkcaller() and Flags[idx] then
         val = val + Flags[idx];
     end;
@@ -137,7 +141,7 @@ BackupNewIndex = hookmetamethod(Game, "__newindex", newcclosure(function(self, i
 end));
 
 local BackupRot;
-BackupRot = hookfunction(RotCamera, function(...)
+BackupRot = Hookfunction(RotCamera, function(...)
     if Flags.NoRecoil then return end;
     return BackupRot(...);
 end);
@@ -216,6 +220,47 @@ local function GetClosestPlayerFromVector2(pos)
     return Players[1] and Players[1][2];
 end;
 
+local function AddBox(player) 
+    local Character = player.Character;
+    local HumanoidRootPart = Character.HumanoidRootPart;
+
+    local Top = PointInstance(HumanoidRootPart, CFrame(Vector3(2.2, 3, 0)));
+    local Bottom = PointInstance(HumanoidRootPart, CFrame(Vector3(-2.2, -3, 0)));
+    local TextPoint = PointInstance(HumanoidRootPart, CFrame(Vector3(0, 3.5, 0)));
+
+    local Rect = RectDynamic(Top, Bottom);
+    local Text = TextDynamic(TextPoint);
+
+    Text.Text = player.Name;
+    Text.Color = Color3(1, 1, 1);
+    Text.Outlined = true;
+    Text.Size = 18;
+
+    Rect.Thickness = 1;
+    Rect.Color = Color3(1, 1, 1);
+    Rect.Outlined = true;
+
+    local Object = {};
+    Object.Rect = Rect;
+    Object.Text = Text;
+    Object.Player = player;
+    Object.Character = Character;
+    
+    player.CharacterRemoving:Connect(function(char)
+        if ESPObjects[char] then
+            ESPObjects[char] = nil;         
+        end;
+    end);
+
+    player.CharacterAdded:Connect(function(char) 
+        if not ESPObjects[char] then
+            AddBox(player);
+        end;
+    end);
+
+    ESPObjects[Character] = Object;
+end;
+
 -- Legit
 do 
     local LegitTab = Window:Tab("Legit");
@@ -241,9 +286,10 @@ do
 
     local SilentAim = LegitTab:Section("Silent Aim");
     SilentAim:Toggle("Enabled", false, function(value) Flags.SilentAim = value; end);
+    SilentAim:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.SilentAimTarget = selected; end)
     SilentAim:Slider("FOV", 1, 2000, 200, function(value) FOV.Radius = value; end);
     SilentAim:Slider("Circle Thickness", 1, 100, 3, function(value) FOV.Thickness = value; end);
-    SilentAim:Colorpicker("Circle Color", Color3.new(1, 1,1), function(value) FOV.Color = value; end);
+    SilentAim:Colorpicker("Circle Color", Color3(1, 1,1), function(value) FOV.Color = value; end);
     SilentAim:Toggle("Rainbow", false, function(value) Flags.FOVCircleRainbow = value; end);
 
     local Weapon = LegitTab:Section("Weapon");
@@ -258,6 +304,7 @@ do
     Flags.TriggerBotDelay = 0;
     Flags.AimbotMaxDistance = 9999;
     Flags.RageBotMaxDistane = 9999;
+    Flags.SilentAimTarget = "Head";
 end;
 
 -- Player
@@ -289,6 +336,37 @@ do
     Main:Toggle("Shadows", game.Lighting.GlobalShadows, function(value) game.Lighting.GlobalShadows = value; end);
     Main:Slider("FOV", 1, 70, 70, function(value) Flags.FieldOfView = value; end);
     Main:Slider("Time", 1, 24, string.match(game.Lighting.TimeOfDay, "(%d+):%d+:%d+") + 0, function(value) game.Lighting.TimeOfDay = string.format("%d:00:00", value); end);
+
+    local ESP = Visual:Section("ESP");
+
+    ESP:Toggle("Box ESP", false, function(value) 
+        if value then
+            for i,v in Pairs(GetChildren(GPlayers)) do
+                if v ~= LocalPlayer and v.Character and FindFirstChild(v.Character, "HumanoidRootPart") then
+                    AddBox(v);
+                end;
+            end;
+        else
+            for i,v in Pairs(ESPObjects) do
+                v.Rect.Visible = false;
+                v.Text.Visible = false;
+                ESPObjects[i] = nil;
+            end;
+        end;
+        Flags.ESP = value;
+    end);
+
+    ESP:Slider("Max Distance", 1, 2000, 1000, function(value) Flags.ESPMaxDistance = value; end);
+
+    ESP:Toggle("Box Rainbow Team", false, function(value) Flags.RainbowTeam = value; end);
+    ESP:Toggle("Box Rainbow Enemy", false, function(value) Flags.RainbowEnemmy = value; end);
+
+    ESP:Colorpicker("Box Team Color", Color3(0.274509, 0.972549, 0.392156), function(value) Flags.ESPTeamColor = value; end);
+    ESP:Colorpicker("Box Enemy Color", Color3(0.972549, 0.274509, 0.286274), function(value) Flags.ESPEnemyColor = value; end);
+
+    Flags.ESPTeamColor = Color3(0.286274, 0.968627, 0.4);
+    Flags.ESPEnemyColor = Color3(0.972549, 0.439215, 0.447058);
+    Flags.ESPMaxDistance = 1000;
 end;
 
 -- Misc
@@ -331,19 +409,24 @@ do
 end;
 
 local BulletHandler, BackupHandler = GetFunction("firebullet");
-local BitBuffer = require(game.ReplicatedStorage.Modules.BitBuffer);
+local BitBuffer = require(Game.ReplicatedStorage.Modules.BitBuffer);
 
-BackupHandler = hookfunction(BulletHandler, function(...) 
+-- THIS IS DETECTABLE BY THE ANTI CHEAT (I THINK) | I WILL FIX IT LATER
+BackupHandler = Hookfunction(BulletHandler, function(...) 
     if not Flags.SilentAim then return BackupHandler(...) end;
 
     local MouseVector = Vector2(Mouse.X, Mouse.Y);
     local Closest = GetClosestPlayerFromVector2(MouseVector);
-    if not Closest then return BackupHandler(...) end;
+    local Head = LocalPlayer.Character.Head.Position;
 
-    local Buffer = BitBuffer();
-    local ray = Ray.new(Camera.CoordinateFrame.p, (CFrame(Camera.CoordinateFrame.p, Camera.CoordinateFrame.p + (Camera.CoordinateFrame.lookVector * 999)) * CFrame()).lookVector.unit * Gun.Value.Range.Value);
+    if not Closest or (Head - Closest.Character[Flags.SilentAimTarget].Position).magnitude > Gun.Value.Range.Value then return BackupHandler(...) end;
+
+    local Target = Closest.Character[Flags.SilentAimTarget];
+    local Result = Raycast(Workspace, Head, Target.Position - Head);
+    if Result and not IsDescendantOf(Result.Instance, Closest.Character) or not Result then return BackupHandler(...) end;
 
     -- whats the quickest way to kill yourself?
+    local Buffer = BitBuffer();
     Buffer.writeString(Gun.Value.Name);
     Buffer.writeUnsigned(2, 1);
     Buffer.writeUnsigned(2, -0);
@@ -352,24 +435,60 @@ BackupHandler = hookfunction(BulletHandler, function(...)
     Buffer.writeInt8(1);
     Buffer.writeUnsigned(1, -0);
     Buffer.writeUnsigned(1, -0);
-    Buffer.writeVector3(ray.Origin);
-    Buffer.writeVector3(Closest.Character.Head.Position);
-    game.ReplicatedStorage.Events["\226\128\139HitPart"]:FireServer(Closest.Character.Head, Buffer.dumpString(), "swaggg");
+    Buffer.writeVector3(Camera.CoordinateFrame.p);
+    Buffer.writeVector3(Target.Position);
+    HitRemote.FireServer(HitRemote, Target, Buffer.dumpString(), "swaggg");
 
     return BackupHandler(...);
 end);
 
-Mouse.Move:Connect(function() 
-    FOV.Position = Vector2(Mouse.X, Mouse.Y);
-end);
+Mouse.Move.Connect(Mouse.Move, function() FOV.Position = Vector2(Mouse.X, Mouse.Y); end);
 
-GPlayers.PlayerAdded:Connect(function(player) 
+GPlayers.PlayerAdded.Connect(GPlayers.PlayerAdded, function(player) 
     if Flags.ModCheck and ModCheck.isMod(player) then
         SynapseNotification("A moderator is in your game!", ToastType.Warning);
     end;
+
+    if Flags.ESP then
+        AddBox(player);
+    end;
 end);
 
-Game.RunService.RenderStepped:Connect(function() 
+Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
+    local Hue = (Tick() / 5) % 1;
+
+    if Flags.ESP then
+        for i,v in Pairs(ESPObjects) do
+            local Player = v.Player;
+            local Character = v.Character;
+            local Distance = floor((LocalPlayer.Character.Head.Position - Character.Head.Position).magnitude);
+
+            v.Text.Visible = Distance < Flags.ESPMaxDistance;
+            v.Rect.Visible = Distance < Flags.ESPMaxDistance;
+
+            -- I hate this CODE
+            if Player.TeamColor == LocalPlayer.TeamColor then
+                Color = Flags.ESPTeamColor;
+                if Flags.RainbowTeam then
+                    Color = fromHSV(Hue, 1, 1);
+                end;
+            else
+                Color = Flags.ESPEnemyColor;
+                if Flags.RainbowEnemmy then
+                    Color = fromHSV(Hue, 1, 1);
+                end;
+            end;
+
+            v.Text.Text = format("%s | %d | [%d/100]", Player.Name, Distance, Character.Humanoid.Health);
+            v.Text.Color = Color;
+            v.Rect.Color = Color;
+        end;
+    end;
+
+    if Flags.FOVCircleRainbow then
+        FOV.Color = fromHSV(Hue, 1, 1);
+    end;
+
     if equipped.Value == "none" then return end;
 
     if Flags.Aimbot and IsMouseButtonPressed(UserInputService, MouseButton2) then
@@ -423,20 +542,6 @@ Game.RunService.RenderStepped:Connect(function()
         end);
     end;
 
-    if Flags.WepRainbow and FindFirstChild(Camera, "Arms") then
-        for i,v in Pairs(GetChildren(Camera.Arms)) do
-            if IsA(v, "MeshPart") then
-                local Hue = (Tick() / 5) % 1; -- fates esp coming in clutch
-                v.Color = fromHSV(Hue, 1, 1);
-            end;
-        end;
-    end;
-
-    if Flags.FOVCircleRainbow then
-        local Hue = (Tick() / 5) % 1; -- fates esp coming in clutch
-        FOV.Color = fromHSV(Hue, 1, 1);
-    end;
-
     if Flags.RapidFire and Gun.Value then
         local FireRate = FindFirstChild(Gun.Value, "FireRate");
         if FireRate and FireRate.Value ~= .02 then
@@ -450,6 +555,14 @@ Game.RunService.RenderStepped:Connect(function()
             ReloadTime.Value = .02;
         end;
     end;
+
+    if Flags.WepRainbow and FindFirstChild(Camera, "Arms") and equipped.Value ~= "none" then
+        for i,v in Pairs(GetChildren(Camera.Arms)) do
+            if IsA(v, "MeshPart") then
+                v.Color = fromHSV(Hue, 1, 1);
+            end;
+        end;
+    end;
 end);
 
-SynapseNotification(string.format("Loaded in %ss", Tick() - TNow), ToastType.Success);
+SynapseNotification(format("Loaded in %ss", Tick() - TNow), ToastType.Success);
