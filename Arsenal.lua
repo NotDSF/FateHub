@@ -147,7 +147,7 @@ BackupRot = Hookfunction(RotCamera, function(...)
 end);
 
 local FOV = Drawing.new("Circle");
-FOV.Visible = true;
+FOV.Visible = false;
 FOV.Thickness = 3;
 FOV.Radius = 200;
 FOV.Position = Vector2(Mouse.X, Mouse.Y);
@@ -262,6 +262,8 @@ local function AddBox(player)
 end;
 
 -- Legit
+local CircleColorPicker;
+
 do 
     local LegitTab = Window:Tab("Legit");
 
@@ -289,7 +291,7 @@ do
     SilentAim:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.SilentAimTarget = selected; end)
     SilentAim:Slider("FOV", 1, 2000, 200, function(value) FOV.Radius = value; end);
     SilentAim:Slider("Circle Thickness", 1, 100, 3, function(value) FOV.Thickness = value; end);
-    SilentAim:Colorpicker("Circle Color", Color3(1, 1,1), function(value) FOV.Color = value; end);
+    CircleColorPicker = SilentAim:Colorpicker("Circle Color", Color3(1, 1,1), function(value) FOV.Color = value; end);
     SilentAim:Toggle("Rainbow", false, function(value) Flags.FOVCircleRainbow = value; end);
 
     local Weapon = LegitTab:Section("Weapon");
@@ -328,6 +330,7 @@ do
 end;
 
 -- Visual
+local BoxTeamColor, BoxEnemyColor;
 do 
     local Visual = Window:Tab("Visual");
     local Main = Visual:Section("Main");
@@ -361,8 +364,8 @@ do
     ESP:Toggle("Box Rainbow Team", false, function(value) Flags.RainbowTeam = value; end);
     ESP:Toggle("Box Rainbow Enemy", false, function(value) Flags.RainbowEnemmy = value; end);
 
-    ESP:Colorpicker("Box Team Color", Color3(0.274509, 0.972549, 0.392156), function(value) Flags.ESPTeamColor = value; end);
-    ESP:Colorpicker("Box Enemy Color", Color3(0.972549, 0.274509, 0.286274), function(value) Flags.ESPEnemyColor = value; end);
+    BoxTeamColor = ESP:Colorpicker("Box Team Color", Color3(0.274509, 0.972549, 0.392156), function(value) Flags.ESPTeamColor = value; end);
+    BoxEnemyColor = ESP:Colorpicker("Box Enemy Color", Color3(0.972549, 0.274509, 0.286274), function(value) Flags.ESPEnemyColor = value; end);
 
     Flags.ESPTeamColor = Color3(0.286274, 0.968627, 0.4);
     Flags.ESPEnemyColor = Color3(0.972549, 0.439215, 0.447058);
@@ -471,11 +474,13 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
                 Color = Flags.ESPTeamColor;
                 if Flags.RainbowTeam then
                     Color = fromHSV(Hue, 1, 1);
+                    BoxTeamColor:UpdateColor(Color);
                 end;
             else
                 Color = Flags.ESPEnemyColor;
                 if Flags.RainbowEnemmy then
                     Color = fromHSV(Hue, 1, 1);
+                    BoxEnemyColor:UpdateColor(Color);
                 end;
             end;
 
@@ -487,6 +492,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
 
     if Flags.FOVCircleRainbow then
         FOV.Color = fromHSV(Hue, 1, 1);
+        CircleColorPicker:UpdateColor(FOV.Color);
     end;
 
     if equipped.Value == "none" then return end;
@@ -556,7 +562,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
         end;
     end;
 
-    if Flags.WepRainbow and FindFirstChild(Camera, "Arms") and equipped.Value ~= "none" then
+    if Flags.WepRainbow and FindFirstChild(Camera, "Arms") then
         for i,v in Pairs(GetChildren(Camera.Arms)) do
             if IsA(v, "MeshPart") then
                 v.Color = fromHSV(Hue, 1, 1);
@@ -564,5 +570,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
         end;
     end;
 end);
+
+FOV.Visible = true;
 
 SynapseNotification(format("Loaded in %ss", Tick() - TNow), ToastType.Success);
