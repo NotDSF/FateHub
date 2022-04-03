@@ -78,7 +78,7 @@ local Checkcaller = checkcaller;
 local Hookmetamethod = hookmetamethod;
 local Hookfunction = hookfunction;
 local Flags, ESPObjects = {}, {};
-local BackupIndex, BackupNewIndex;
+local BackupIndex, BackupNewIndex, BackupNamecall;
 
 local function GetLocal(index) 
     for i,v in Pairs(Getgc(true)) do
@@ -411,38 +411,24 @@ do
     ]]
 end;
 
-local BulletHandler, BackupHandler = GetFunction("firebullet");
-local BitBuffer = require(Game.ReplicatedStorage.Modules.BitBuffer);
+BackupNamecall = hookmetamethod(game, "__namecall", function(...) 
+    local method = getnamecallmethod();
 
--- THIS IS DETECTABLE BY THE ANTI CHEAT (I THINK) | I WILL FIX IT LATER
-BackupHandler = Hookfunction(BulletHandler, function(...) 
-    if not Flags.SilentAim then return BackupHandler(...) end;
+    if method == "FindPartOnRayWithIgnoreList" and Flags.SilentAim then
+        local MouseVector = Vector2(Mouse.X, Mouse.Y);
+        local Closest = GetClosestPlayerFromVector2(MouseVector);
+        local Head = LocalPlayer.Character.Head.Position;
 
-    local MouseVector = Vector2(Mouse.X, Mouse.Y);
-    local Closest = GetClosestPlayerFromVector2(MouseVector);
-    local Head = LocalPlayer.Character.Head.Position;
+        if not Closest or (Head - Closest.Character[Flags.SilentAimTarget].Position).magnitude > Gun.Value.Range.Value then return BackupNamecall(...) end;
 
-    if not Closest or (Head - Closest.Character[Flags.SilentAimTarget].Position).magnitude > Gun.Value.Range.Value then return BackupHandler(...) end;
+        local Target = Closest.Character[Flags.SilentAimTarget];
+        local Result = Raycast(Workspace, Head, Target.Position - Head);
+        if Result and not IsDescendantOf(Result.Instance, Closest.Character) or not Result then return BackupNamecall(...) end;
 
-    local Target = Closest.Character[Flags.SilentAimTarget];
-    local Result = Raycast(Workspace, Head, Target.Position - Head);
-    if Result and not IsDescendantOf(Result.Instance, Closest.Character) or not Result then return BackupHandler(...) end;
+        return Target, Camera.CFrame.LookVector, Target.Position;
+    end;
 
-    -- whats the quickest way to kill yourself?
-    local Buffer = BitBuffer();
-    Buffer.writeString(Gun.Value.Name);
-    Buffer.writeUnsigned(2, 1);
-    Buffer.writeUnsigned(2, -0);
-    Buffer.writeInt8(3);
-    Buffer.writeFloat16(Tick());
-    Buffer.writeInt8(1);
-    Buffer.writeUnsigned(1, -0);
-    Buffer.writeUnsigned(1, -0);
-    Buffer.writeVector3(Camera.CoordinateFrame.p);
-    Buffer.writeVector3(Target.Position);
-    HitRemote.FireServer(HitRemote, Target, Buffer.dumpString(), "swaggg");
-
-    return BackupHandler(...);
+    return BackupNamecall(...);
 end);
 
 Mouse.Move.Connect(Mouse.Move, function() FOV.Position = Vector2(Mouse.X, Mouse.Y); end);
@@ -572,5 +558,4 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
 end);
 
 FOV.Visible = true;
-
 SynapseNotification(format("Loaded in %ss", Tick() - TNow), ToastType.Success);
