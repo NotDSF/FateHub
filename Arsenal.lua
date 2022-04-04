@@ -35,9 +35,9 @@ local Lib: Library = loadstring(readfile("UILib.lua"))();
 local Window = Lib:CreateWindow("FH", "Arsenal", Color3.fromRGB(255, 50, 150));
 Window:SetKeybindClose(Enum.KeyCode.F5);
 
-local Rawget = rawget;
-local Type = typeof;
-local Getgc = getgc;
+--local Rawget = rawget;
+--local Type = typeof;
+--local Getgc = getgc;
 local Pairs = pairs;
 local ToastNotif = syn.toast_notification;
 local Game = game;
@@ -55,11 +55,11 @@ local IsDescendantOf = Game.IsDescendantOf;
 local IsA = Game.IsA;
 local Raycast = Workspace.Raycast;
 --local match = string.match;
-local HitRemote = game.ReplicatedStorage.Events["\226\128\139HitPart"];
+--local HitRemote = game.ReplicatedStorage.Events["\226\128\139HitPart"];
 local RaycastParams = RaycastParams.new();
 local CFrame = CFrame.new;
 local sort = table.sort;
-local info = debug.info;
+--local info = debug.info;
 local Delay = task.delay;
 local Tick = tick;
 local fromHSV = Color3.fromHSV;
@@ -72,28 +72,37 @@ local TextDynamic = TextDynamic.new;
 local format = string.format;
 local floor = math.floor;
 local MouseButton2 = Enum.UserInputType.MouseButton2;
-local Type = typeof;
+--local Type = typeof;
 local Mouse = LocalPlayer:GetMouse();
 local Checkcaller = checkcaller;
 local Hookmetamethod = hookmetamethod;
 local Hookfunction = hookfunction;
+local getnamecallmethod = getnamecallmethod;
+local filtergc = filtergc;
+
 local Flags, ESPObjects = {}, {};
 local BackupIndex, BackupNewIndex, BackupNamecall;
 
 local function GetLocal(index) 
-    for i,v in Pairs(Getgc(true)) do
-        if Type(v) == "table" and Rawget(v, index) then
-            return v;
+    --[[
+        for i,v in Pairs(Getgc(true)) do
+            if Type(v) == "table" and Rawget(v, index) then
+                return v;
+            end;
         end;
-    end;
+    ]]
+    return filtergc("table", { Keys = { index } }, true);
 end;
 
 local function GetFunction(name) 
-    for i,v in Pairs(Getgc()) do
+    --[[
+            for i,v in Pairs(Getgc()) do
         if Type(v) == "function" and info(v, "n") == name then
             return v;
         end;
     end;
+    ]]
+    return filtergc("function", { Name = name }, true);
 end;
 
 local function SynapseNotification(Content, Type) 
@@ -226,7 +235,7 @@ local function AddBox(player)
 
     local Top = PointInstance(HumanoidRootPart, CFrame(Vector3(2.2, 3, 0)));
     local Bottom = PointInstance(HumanoidRootPart, CFrame(Vector3(-2.2, -3, 0)));
-    local TextPoint = PointInstance(HumanoidRootPart, CFrame(Vector3(0, 3.5, 0)));
+    local TextPoint = PointInstance(HumanoidRootPart, CFrame(Vector3(0, 3.8, 0)));
 
     local Rect = RectDynamic(Top, Bottom);
     local Text = TextDynamic(TextPoint);
@@ -288,7 +297,8 @@ do
 
     local SilentAim = LegitTab:Section("Silent Aim");
     SilentAim:Toggle("Enabled", false, function(value) Flags.SilentAim = value; end);
-    SilentAim:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.SilentAimTarget = selected; end)
+    SilentAim:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.SilentAimTarget = selected; end);
+    SilentAim:Toggle("Show FOV Circle", true, function(value) FOV.Visible = value; end);
     SilentAim:Slider("FOV", 1, 2000, 200, function(value) FOV.Radius = value; end);
     SilentAim:Slider("Circle Thickness", 1, 100, 3, function(value) FOV.Thickness = value; end);
     CircleColorPicker = SilentAim:Colorpicker("Circle Color", Color3(1, 1,1), function(value) FOV.Color = value; end);
@@ -359,6 +369,9 @@ do
         Flags.ESP = value;
     end);
 
+    ESP:Toggle("Show Team", true, function(value) Flags.ShowTeam = value; end);
+    ESP:Toggle("Show Enemy", true, function(value) Flags.ShowEnemy = value; end);
+
     ESP:Slider("Max Distance", 1, 2000, 1000, function(value) Flags.ESPMaxDistance = value; end);
 
     ESP:Toggle("Box Rainbow Team", false, function(value) Flags.RainbowTeam = value; end);
@@ -370,6 +383,8 @@ do
     Flags.ESPTeamColor = Color3(0.286274, 0.968627, 0.4);
     Flags.ESPEnemyColor = Color3(0.972549, 0.439215, 0.447058);
     Flags.ESPMaxDistance = 1000;
+    Flags.ShowTeam = true;
+    Flags.ShowEnemy = true;
 end;
 
 -- Misc
@@ -414,7 +429,7 @@ end;
 BackupNamecall = hookmetamethod(game, "__namecall", function(...) 
     local method = getnamecallmethod();
 
-    if method == "FindPartOnRayWithIgnoreList" and Flags.SilentAim then
+    if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" and Flags.SilentAim then
         local MouseVector = Vector2(Mouse.X, Mouse.Y);
         local Closest = GetClosestPlayerFromVector2(MouseVector);
         local Head = LocalPlayer.Character.Head.Position;
@@ -444,7 +459,7 @@ GPlayers.PlayerAdded.Connect(GPlayers.PlayerAdded, function(player)
 end);
 
 Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
-    local Hue = (Tick() / 5) % 1;
+    local RGB = fromHSV((Tick() / 5) % 1, 1, 1);
 
     if Flags.ESP then
         for i,v in Pairs(ESPObjects) do
@@ -459,15 +474,21 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
             if Player.TeamColor == LocalPlayer.TeamColor then
                 Color = Flags.ESPTeamColor;
                 if Flags.RainbowTeam then
-                    Color = fromHSV(Hue, 1, 1);
+                    Color = RGB;
                     BoxTeamColor:UpdateColor(Color);
                 end;
+
+                v.Text.Visible = Flags.ShowTeam;
+                v.Rect.Visible = Flags.ShowTeam;
             else
                 Color = Flags.ESPEnemyColor;
                 if Flags.RainbowEnemmy then
-                    Color = fromHSV(Hue, 1, 1);
+                    Color = RGB;
                     BoxEnemyColor:UpdateColor(Color);
                 end;
+
+                v.Text.Visible = Flags.ShowEnemy;
+                v.Rect.Visible = Flags.ShowEnemy;
             end;
 
             v.Text.Text = format("%s | %d | [%d/100]", Player.Name, Distance, Character.Humanoid.Health);
@@ -477,8 +498,8 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
     end;
 
     if Flags.FOVCircleRainbow then
-        FOV.Color = fromHSV(Hue, 1, 1);
-        CircleColorPicker:UpdateColor(FOV.Color);
+        FOV.Color = RGB;
+        CircleColorPicker:UpdateColor(RGB);
     end;
 
     if equipped.Value == "none" then return end;
@@ -551,7 +572,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
     if Flags.WepRainbow and FindFirstChild(Camera, "Arms") then
         for i,v in Pairs(GetChildren(Camera.Arms)) do
             if IsA(v, "MeshPart") then
-                v.Color = fromHSV(Hue, 1, 1);
+                v.Color = RGB;
             end;
         end;
     end;
