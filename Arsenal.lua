@@ -78,9 +78,11 @@ local Checkcaller = checkcaller;
 local Hookmetamethod = hookmetamethod;
 local Hookfunction = hookfunction;
 local getnamecallmethod = getnamecallmethod;
+local LineDynamic = LineDynamic.new;
+local Point2D = Point2D.new;
 local filtergc = filtergc;
 
-local Flags, ESPObjects = {}, {};
+local Flags, ESPObjects, ESPLines = {}, {}, {};
 local BackupIndex, BackupNewIndex, BackupNamecall;
 
 local function GetLocal(index) 
@@ -157,7 +159,7 @@ end);
 
 local FOV = Drawing.new("Circle");
 FOV.Visible = false;
-FOV.Thickness = 3;
+FOV.Thickness = 1;
 FOV.Radius = 200;
 FOV.Position = Vector2(Mouse.X, Mouse.Y);
 FOV.Color = fromHSV(0, 0.0, 1);
@@ -254,7 +256,7 @@ local function AddBox(player)
     Object.Text = Text;
     Object.Player = player;
     Object.Character = Character;
-    
+
     player.CharacterRemoving:Connect(function(char)
         if ESPObjects[char] then
             ESPObjects[char] = nil;         
@@ -268,6 +270,37 @@ local function AddBox(player)
     end);
 
     ESPObjects[Character] = Object;
+end;
+
+local function AddLine(player) 
+    local Character = player.Character;
+    local Head = Character.Head;
+
+    local Line = LineDynamic();
+    Line.Visible = true;
+    Line.From = PointInstance(Head);
+    Line.To = Point2D(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y);
+    Line.Color = Color3(255, 255, 255)
+    Line.Thickness = 1;
+
+    local Object = {};
+    Object.Line = Line;
+    Object.Player = player;
+    Object.Character = Character;
+
+    player.CharacterRemoving:Connect(function(char)
+        if ESPLines[char] then
+            ESPObjects[char] = nil;         
+        end;
+    end);
+
+    player.CharacterAdded:Connect(function(char) 
+        if not ESPLines[char] then
+            AddLine(player);
+        end;
+    end);
+
+    ESPLines[Character] = Object;
 end;
 
 -- Legit
@@ -300,7 +333,7 @@ do
     SilentAim:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.SilentAimTarget = selected; end);
     SilentAim:Toggle("Show FOV Circle", true, function(value) FOV.Visible = value; end);
     SilentAim:Slider("FOV", 1, 2000, 200, function(value) FOV.Radius = value; end);
-    SilentAim:Slider("Circle Thickness", 1, 100, 3, function(value) FOV.Thickness = value; end);
+    SilentAim:Slider("Circle Thickness", 1, 100, 1, function(value) FOV.Thickness = value; end);
     CircleColorPicker = SilentAim:Colorpicker("Circle Color", Color3(1, 1,1), function(value) FOV.Color = value; end);
     SilentAim:Toggle("Rainbow", false, function(value) Flags.FOVCircleRainbow = value; end);
 
@@ -369,19 +402,37 @@ do
         Flags.ESP = value;
     end);
 
+    ESP:Toggle("Tracer ESP", false, function(value) 
+        if value then
+            for i,v in Pairs(GetChildren(GPlayers)) do
+                if v ~= LocalPlayer and v.Character and FindFirstChild(v.Character, "HumanoidRootPart") then
+                    AddLine(v);
+                end;
+            end;
+        else
+            for i,v in Pairs(ESPLines) do
+                v.Line.Visible = false;
+                ESPLines[i] = nil;
+            end;
+        end;
+        Flags.Tracers = value;
+    end);
+
     ESP:Toggle("Show Team", true, function(value) Flags.ShowTeam = value; end);
     ESP:Toggle("Show Enemy", true, function(value) Flags.ShowEnemy = value; end);
 
     ESP:Slider("Max Distance", 1, 2000, 1000, function(value) Flags.ESPMaxDistance = value; end);
+    ESP:Slider("Box Thickness", 1, 100, 1, function(value) Flags.ESPBoxThickness = value; end);
+    ESP:Toggle("Rainbow Team", false, function(value) Flags.RainbowTeam = value; end);
+    ESP:Toggle("Rainbow Enemy", false, function(value) Flags.RainbowEnemmy = value; end);
 
-    ESP:Toggle("Box Rainbow Team", false, function(value) Flags.RainbowTeam = value; end);
-    ESP:Toggle("Box Rainbow Enemy", false, function(value) Flags.RainbowEnemmy = value; end);
-
-    BoxTeamColor = ESP:Colorpicker("Box Team Color", Color3(0.274509, 0.972549, 0.392156), function(value) Flags.ESPTeamColor = value; end);
-    BoxEnemyColor = ESP:Colorpicker("Box Enemy Color", Color3(0.972549, 0.274509, 0.286274), function(value) Flags.ESPEnemyColor = value; end);
+    BoxTeamColor = ESP:Colorpicker("Team Color", Color3(0.274509, 0.972549, 0.392156), function(value) Flags.ESPTeamColor = value; end);
+    BoxEnemyColor = ESP:Colorpicker("Enemy Color", Color3(0.972549, 0.274509, 0.286274), function(value) Flags.ESPEnemyColor = value; end);
 
     Flags.ESPTeamColor = Color3(0.286274, 0.968627, 0.4);
     Flags.ESPEnemyColor = Color3(0.972549, 0.439215, 0.447058);
+
+    Flags.ESPBoxThickness = 1;
     Flags.ESPMaxDistance = 1000;
     Flags.ShowTeam = true;
     Flags.ShowEnemy = true;
@@ -429,7 +480,7 @@ end;
 BackupNamecall = hookmetamethod(game, "__namecall", function(...) 
     local method = getnamecallmethod();
 
-    if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" and Flags.SilentAim then
+    if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" and Flags.SilentAim and Gun.Value then
         local MouseVector = Vector2(Mouse.X, Mouse.Y);
         local Closest = GetClosestPlayerFromVector2(MouseVector);
         local Head = LocalPlayer.Character.Head.Position;
@@ -439,7 +490,7 @@ BackupNamecall = hookmetamethod(game, "__namecall", function(...)
         local Target = Closest.Character[Flags.SilentAimTarget];
         local Result = Raycast(Workspace, Head, Target.Position - Head);
         if Result and not IsDescendantOf(Result.Instance, Closest.Character) or not Result then return BackupNamecall(...) end;
-
+        
         return Target, Camera.CFrame.LookVector, Target.Position;
     end;
 
@@ -456,6 +507,10 @@ GPlayers.PlayerAdded.Connect(GPlayers.PlayerAdded, function(player)
     if Flags.ESP then
         AddBox(player);
     end;
+
+    if Flags.Tracers then
+        AddLine(player);
+    end;
 end);
 
 Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
@@ -469,6 +524,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
 
             v.Text.Visible = Distance < Flags.ESPMaxDistance;
             v.Rect.Visible = Distance < Flags.ESPMaxDistance;
+            v.Rect.Thickness = Flags.ESPBoxThickness;
 
             -- I hate this CODE
             if Player.TeamColor == LocalPlayer.TeamColor then
@@ -494,6 +550,34 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
             v.Text.Text = format("%s | %d | [%d/100]", Player.Name, Distance, Character.Humanoid.Health);
             v.Text.Color = Color;
             v.Rect.Color = Color;
+        end;
+    end;
+
+    if Flags.Tracers then
+        for i,v in Pairs(ESPLines) do
+            local Player = v.Player;
+            local Character = v.Character;
+            local Distance = floor((LocalPlayer.Character.Head.Position - Character.Head.Position).magnitude);
+
+            v.Line.Visible = Distance < Flags.ESPMaxDistance;
+
+            if Player.TeamColor == LocalPlayer.TeamColor then
+                Color = Flags.ESPTeamColor;
+                if Flags.RainbowTeam then
+                    Color = RGB;
+                    BoxTeamColor:UpdateColor(Color);
+                end;
+                v.Line.Visible = Flags.ShowTeam;
+            else
+                Color = Flags.ESPEnemyColor;
+                if Flags.RainbowEnemmy then
+                    Color = RGB;
+                    BoxEnemyColor:UpdateColor(Color);
+                end;
+                v.Line.Visible = Flags.ShowEnemy;
+            end;
+
+            v.Line.Color = Color;
         end;
     end;
 
@@ -539,11 +623,13 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
             local Head = LocalPlayer.Character.Head.Position;
             RaycastParams.FilterDescendantsInstances = { LocalPlayer.Character, Camera, Workspace.Map.Ignore };
     
-            local Target = Closest.Character[Flags.RageTarget or "Head"].Position;
-            local Result = Raycast(Workspace, Head, Target - Head, RaycastParams);
-            if Result and IsDescendantOf(Result.Instance, Closest.Character) then
-                Camera.CFrame = CFrame(Camera.CFrame.Position, Target);
-                Weapon.firebullet();
+            local Target = FindFirstChild(Closest.Character, Flags.RageTarget or "Head");
+            if Target then
+                local Result = Raycast(Workspace, Head, Target.Position - Head, RaycastParams);
+                if Result and IsDescendantOf(Result.Instance, Closest.Character) then
+                    Camera.CFrame = CFrame(Camera.CFrame.Position, Target.Position);
+                    Weapon.firebullet();
+                end;
             end;
         end;
     end;
