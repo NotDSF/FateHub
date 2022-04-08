@@ -27,6 +27,7 @@ local findFirstChild = game.FindFirstChild
 local waitForChild = game.WaitForChild
 local findPartOnRayWithIgnoreList = Workspace.FindPartOnRayWithIgnoreList
 
+local cframenew = CFrame.new
 local vector3new = Vector3.new
 local vector2new = Vector2.new
 local color3new = Color3.new
@@ -182,7 +183,7 @@ end);
 local __newindex;
 __newindex = hookmetamethod(game, "__newindex", function(self, prop, value)
     if (characterSettings.third_person and self == currentCamera and prop == "CFrame") then
-        value += vector2new(unpack(characterSettings.third_person_values));
+        value *= cframenew(unpack(characterSettings.third_person_values));
     end
     return __newindex(self, prop, value);
 end);
@@ -904,7 +905,20 @@ visuals:Section("");
 
 local world = visuals:Section("World");
 world:Toggle("No Shadows", false, function(callback)
-
+    for i, v in pairs(game:GetDescendants()) do
+        if (IsA(v, "PointLight") or IsA(v, "SurfaceLight") or IsA(v, "SpotLight")) then
+            v.Enabled = callback
+            v.Shadows = not callback
+            v.Range = math.huge
+        end
+    end
+    Services.Lighting.GlobalShadows = not callback
+end);
+world:Slider("Time of Day", 0, 24, Services.Lighting.ClockTime, function(callback)
+    Services.Lighting.ClockTime = callback
+end);
+world:Colorpicker("Color Correction", Services.Lighting.ColorCorrection.TintColor, function(callback)
+    Services.Lighting.ColorCorrection.TintColor = callback
 end);
 
 visuals:Section("");
@@ -972,7 +986,7 @@ end);
 backtrack:Slider("Backtrack MS", 0, 3000, backtrackSettings.backtrackMS, function(callback)
     backtrackSettings.backtrackMS = callback
 end, false);
-backtrack:Dropdown("Backtrack redirect", backtrackSettings.redirect, {"Head", "Chest"}, function(callback)
+backtrack:Dropdown("Backtrack redirect", backtrackSettings.backtrack_redirect, {"Head", "Chest"}, function(callback)
     backtrackSettings.BacktrackRedirect = callback
 end);
 
