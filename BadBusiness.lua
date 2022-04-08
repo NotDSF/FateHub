@@ -1,227 +1,327 @@
--- not done
-local ProtectInstance = loadstring(readfile("ProtectInstance.lua"))();
-
--- if (not ProtectInstance) then error("protectinstance  missing"); return end
-
-local wait = task.wait
-
-local Workspace = game:GetService("Workspace");
-local UserInputService = game:GetService("UserInputService");
-local RunService = game:GetService("RunService")
-local Players = game:GetService("Players");
-local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse();
-local MouseVector = Vector2.new(Mouse.X, Mouse.Y + 36);
-
-local CurrentCamera = Workspace.CurrentCamera
-
-local Settings = {
-    NoRecoil = false,
-    InstantAimTime = false,
-    FireMode = nil, --[[ Auto, Semi, Burst ]]
-    FieldOfView = nil,
-    FireRate = nil, --[[ 1 - 10 ]]
-
-    FovRadius = 150,
-
-    Aimbot = false,
-    AimlockKey = Enum.UserInputType.MouseButton2,
-    Smoothnes = 1,
-
-    Redirect = "Head",
-
-    ClosestCursor = false,
-    ClosestPlayer = false,
-
-    Backtrack = false,
-    BacktrackMS = 500,
-    ShowBacktrack = false,
-
-    Triggerbot = false,
-    TriggerbotMS = 0,
-
-    SilentAim = false,
-    Wallbang = false
-}
-
-local Locked = false
-
-local filtergc = filtergc or function(Type, Args)
-    local Results = {}
-    for Index, Value in pairs(getgc(true)) do
-        if (type(Value) == Type) then
-            local Keys = Args.Keys
-            local Good = true
-            for Index2, Value2 in pairs(Keys) do
-                if (not rawget(Value, Value2)) then
-                    Good = false
-                    break
-                end
-            end
-            if (Good) then
-                table.insert(Results, Value);
-            end
+local UILibrary = loadfile("UILibrary.lua")();
+local VisualsLib = loadfile("Visuals.lua")();
+local Visuals = VisualsLib.new();
+local Services = setmetatable({}, {
+    __index = function(self, serviceName)
+        local good, service = pcall(game.GetService, game, serviceName);
+        if (good) then
+            self[serviceName] = service
+            return service;
         end
     end
-    return Results
-end
-
-local TS = filtergc("table", {
-    Keys = { "Characters", "Teams" }
-})[1];
-local Network = TS.Network
-
-local WeaponConfigDefault = filtergc("table", {
-    Keys = { "Controller", "Animators", "Model", "Slot", "Category" }
 });
 
-local Characters = {}
-local Teams = {}
-local Trackers = {}
-local Keys = {}
-local OldAnims = {}
+local Workspace = Services.Workspace
+local currentCamera = Workspace.currentCamera
+local worldtoscreen = currentCamera.WorldToScreenPoint
+local viewportSize = currentCamera.ViewportSize
+local ReplicatedStorage = Services.ReplicatedStorage
+local UserInputService = Services.UserInputService
+local Players = Services.Players
+local localPlayer = Players.LocalPlayer
+local mouse = localPlayer:GetMouse();
+local mouseVector = Vector2.new(mouse.X, mouse.Y);
+local inset = Services.GuiService:GetGuiInset();
 
+local findFirstChild = game.FindFirstChild
+local waitForChild = game.WaitForChild
+local findPartOnRayWithIgnoreList = Workspace.FindPartOnRayWithIgnoreList
 
-local UpdateWeaponSettings = function()
-    local Items = Characters[LocalPlayer]:WaitForChild("Backpack"):WaitForChild("Items");
+local vector3new = Vector3.new
+local vector2new = Vector2.new
+local color3new = Color3.new
+local fromRGB = Color3.fromRGB
+local wait = task.wait
+local split = string.split
+local format = string.format
+local floor = math.floor
+local random = math.random
+local create = table.create
+local tfind = table.find
+local IsA = game.IsA
 
-    for Index, Value in pairs(WeaponConfigDefault) do
-        if (Items:FindFirstChild(Value.Model)) then
-            local Recoil = Value.Recoil
-            if (Settings.NoRecoil and Recoil and type(Recoil) == 'table') then
-                local RecoilSettings = Recoil.Default
-                if (RecoilSettings) then
-                    RecoilSettings.RecoilMovement =  Vector2.new(1, 1);
-                    RecoilSettings.CameraRotationVariance = Vector3.new(1, 1);
-                    RecoilSettings.RecoilMovementVariance = Vector2.new(1, 1);
-                    RecoilSettings.RecoilRecenterTime = 0
-                    RecoilSettings.RecoilMovementTime = 0
-                    RecoilSettings.RecoilCrouchScale = 0
-                    RecoilSettings.RecoileProneScale = 0
-                end
-            end
-            local Aim = Value.Aim
-            if (Settings.InstantAimTime and Aim and type(Aim) == 'number') then
-                if (type(Aim.AimTime) == 'number') then
-                    Aim.AimTime = 0
-                    print(true, Value.Model);
-                end
-            end
-            local FireModeList = Value.FireModeList
-            if (Settings.FireMode and type(FireModeList) == 'table') then
-                Value.FireModeList = {Settings.FireMode}
+local TS = filtergc("table", {
+    Keys = { "Characters", "Teams", "Network" }
+})[1];
+local Network = TS.Network
+local Characters = TS.Characters
+local Teams = TS.Teams
+
+local aliveCharacters = {};
+local drawEntries = {};
+local teamsPlayers = {};
+local trackers = {};
+local keys = {};
+local protectedInstances = {};
+local locked = false
+local flying = false
+
+local controlScriptClosure = getscriptclosure(localPlayer.PlayerScripts.ControlScript);
+local changestate = debug.getproto(controlScriptClosure, 14, true)[1];
+local getspeed = debug.getproto(controlScriptClosure, 2, true)[1]
+
+local settings = {
+    gunmods = {
+        no_recoil = false,
+        instant_scope = false,
+        instant_reload = false,
+        fire_mode = nil,
+        fire_rate = 750
+    },
+
+    fov = {
+        fov_enabled = true,
+        fov_color = color3new(1, 1, 1),
+        fov_radius = 150,
+        snaplines_enabled = true,
+        snaplines_color = color3new(1, 1, 1)
+    },
+
+    aimbot = {
+        aimbot_enabled = false,
+        aimlock_key = Enum.UserInputType.MouseButton2,
+        smoothness = 1,
+        lock_on = "Head",
+        closest_cursor = true,
+        closest_player = false,
+        triggerbot = false,
+        triggerbotMS = 0,
+    },
+
+    silent_aim = {
+        silent_aim = false,
+        wallbang = false,
+    },
+
+    backtrack = {
+        backtrack = false,
+        backtrackMS = 500,
+        show_backtrack = false,
+        backtrack_color = color3new(1, 0, 0),
+        backtrack_redirect = "Chest",
+    },
+
+    character = {
+        weapon_color = color3new(1, 0, 0),
+        weapon_material = "SmoothPlastic",
+        color_weapon = false,
+        arms_color = color3new(1, 0, 0),
+        arm_material = "SmoothPlastic",
+        color_arm = false,
+        third_person = false,
+        third_person_values = {1, 2, 10};
+    },
+
+    movement = {
+        auto_strafe = false,
+        bhop = false,
+        walkspeed = 16,
+        jumppower = 50,
+    },
+
+    rage = {
+        kill_aura = false,
+        rage_bot = false
+    },
+
+    esp = {
+        enabled = true,
+        names_enabled = true,
+        distance_enabled = true,
+        health_enabled = true,
+        esp_transparency = 1,
+        chams_enabled = false,
+        chams_color = color3new(1, 0, 0),
+        chams_outline = true,
+        chams_outline_color = color3new(1, 1, 1),
+        tracers_enabled = false,
+        tracer_color = fromRGB(20, 226, 207),
+        box_esp = false,
+        box_color = fromRGB(20, 226, 207),
+        team_colors = true,
+        thickness = 1.5,
+        tracer_thickness = 1.6,
+        transparency = .9,
+        tracer_transparency = .7,
+        size = 16,
+        render_distance = 9e9,
+        color = fromRGB(20, 226, 207),
+        outline_color = color3new(),
+        tracer_to = "Head",
+        show_teams = {};
+    }
+};
+local espSettings = settings.esp
+local characterSettings = settings.character
+local aimbotSettings = settings.aimbot
+local silentAimSettings = settings.silent_aim
+local fovSettings = settings.fov
+local gunmodSettings = settings.gunmods
+local backtrackSettings = settings.backtrack
+local movementSettings = settings.movement
+
+local protectInstance = function(instance)
+    protectedInstances[#protectedInstances + 1] = instance
+end
+
+local __namecall;
+__namecall = hookmetamethod(game, "__namecall", function(self, ...)
+    if (not checkcaller() and getnamecallmethod() == "GetDescendants") then
+        local descendants = __namecall(self, ...);
+        local filteredDescendants = {};
+        for index, descendant in pairs(descendants) do
+            if (not table.find(protectedInstances, descendant)) then
+                filteredDescendants[#filteredDescendants + 1] = descendant
             end
         end
+        return filteredDescendants;
     end
-end
+    return __namecall(self, ...);
+end);
 
-local SetFOV = function(FOV)
-    TS.Camera.FieldOfView = math.clamp(FOV or 90 --[[Default is 90]], 45, 270);
-end
-
-local FlyCharacter = function(Camera, Root, Humanoid, Speed)
-    local BodyGyro = Instance.new("BodyGyro");
-    local BodyVelocity = Instance.new("BodyVelocity");
-
-    local Character = Root.Parent
-    local Animate = Character:FindFirstChild("Animate");
-
-    if (Animate) then
-        pcall(function()
-            local IdleAnim1 = "507766388"
-
-            local Run = Animate.run.RunAnim
-            OldAnims[Run] = Run.AnimationId
-            Run.AnimationId = IdleAnim1
-            local Walk = Animate.walk.WalkAnim
-            OldAnims[Walk] = Walk.AnimationId
-            Walk.AnimationId = IdleAnim1
-            local Fall = Animate.fall.FallAnim
-            OldAnims[Fall] = Fall.AnimationId
-            Fall.AnimationId = IdleAnim1
-            local Jump = Animate.jump.JumpAnim
-            OldAnims[Jump] = Jump.AnimationId
-            Jump.AnimationId = IdleAnim1
-        end)
+local __newindex;
+__newindex = hookmetamethod(game, "__newindex", function(self, prop, value)
+    if (characterSettings.third_person and self == currentCamera and prop == "CFrame") then
+        value += vector2new(unpack(characterSettings.third_person_values));
     end
+    return __newindex(self, prop, value);
+end);
 
-    ProtectInstance(BodyGyro);
-    ProtectInstance(BodyVelocity);
-    BodyGyro.Parent = Root
-    BodyVelocity.Parent = Root
-    BodyGyro.P = 9e9
-    BodyGyro.MaxTorque = Vector3.new(1, 1, 1) * 9e9
-    BodyGyro.CFrame = Root.CFrame
-    BodyVelocity.MaxForce = Vector3.new(1, 1, 1) * 9e9
-    BodyVelocity.Velocity = Vector3.new(0, 0.1, 0);
-    Humanoid = Humanoid or Character:FindFirstChildOfClass("Humanoid");
-    if (Humanoid) then
-        Humanoid:ChangeState(8);
-        Humanoid.StateChanged:Connect(function()
-            Humanoid:ChangeState(8);
-            Humanoid.PlatformStand = false
-        end);
-    end
+local flyChar = function(camera, root, speed)
+    local bodyGyro = Instance.new("BodyGyro");
+    local bodyVelocity = Instance.new("BodyVelocity");
 
-    local Table1 = { W = 0; A = 0; S = 0; D = 0 }
-    Camera = Camera or CurrentCamera
-    Speed = math.clamp(Speed or 3, 1, 9);
+    protectInstance(bodyGyro);
+    protectInstance(bodyVelocity);
+    bodyGyro.Parent = root
+    bodyVelocity.Parent = root
+    bodyGyro.P = 9e9
+    bodyGyro.MaxTorque = Vector3.one * 9e9
+    bodyGyro.CFrame = root.CFrame
+    bodyVelocity.MaxForce = Vector3.one * 9e9
+    bodyVelocity.Velocity = Vector3.zero
+
+    local veczero = Vector3.zero
+
+    local WASD = { W = 0, A = 0, S = 0, D = 0 };
+    camera = camera or currentCamera
+    speed = math.clamp(speed or 3, 1, 7);
     task.spawn(function()
-        while (true) do
-            Table1["W"] = Keys["W"] and Speed or 0
-            Table1["A"] = Keys["A"] and -Speed or 0
-            Table1["S"] = Keys["S"] and -Speed or 0
-            Table1["D"] = Keys["D"] and Speed or 0
-            if ((Table1["W"] + Table1["S"]) ~= 0 or (Table1["A"] + Table1["D"]) ~= 0) then
-                BodyVelocity.Velocity = ((Camera.CoordinateFrame.lookVector * (Table1["W"] + Table1["S"])) + ((Camera.CoordinateFrame * CFrame.new(Table1["A"] + Table1["D"], (Table1["W"] + Table1["S"]) * 0.2, 0).Position) - Camera.CoordinateFrame.Position)) * 50
+        flying = true
+        while (flying) do
+            WASD.W = keys.W and speed or 0
+            WASD.A = keys.A and -speed or 0
+            WASD.S = keys.S and -speed or 0
+            WASD.D = keys.D and speed or 0
+            if ((WASD.W + WASD.S) ~= 0 or (WASD.A + WASD.D) ~= 0) then
+                bodyVelocity.Velocity = ((camera.CoordinateFrame.lookVector * (WASD.W + WASD.S)) + ((camera.CoordinateFrame * CFrame.new(WASD.A + WASD.D, (WASD.W + WASD.S) * 0.2, 0).Position) - camera.CoordinateFrame.Position)) * 50
             else
-                BodyVelocity.Velocity = Vector3.new(0, 0.1, 0);
+                bodyVelocity.Velocity = veczero
             end
-            BodyGyro.CFrame = Camera.CoordinateFrame
-            wait()
+            bodyGyro.CFrame = camera.CoordinateFrame
+            wait();
         end
+        bodyVelocity:Destroy();
+        bodyGyro:Destroy();
     end);
 end
 
-local FOV = Drawing.new("Circle");
-FOV.Color = Color3.fromRGB(255, 255, 255);
-FOV.Thickness = 1
-FOV.Transparency = 1
-FOV.Filled = false
-FOV.Radius = Settings.FovRadius
-FOV.Position = MouseVector
-FOV.Visible = true
-
-local SnapLine = Drawing.new("Line");
-SnapLine.Color = Color3.fromRGB(255, 255, 255);
-SnapLine.Thickness = .1
-SnapLine.Transparency = 1
-SnapLine.From = MouseVector
-
 task.spawn(function()
-    while task.wait(Settings.BacktrackMS / 1000) do
-        for Character, CharTrackers in pairs(Trackers) do
-            for Index2, Tracker in pairs(CharTrackers) do
-                Tracker:Destroy();
+    while task.wait(backtrackSettings.backtrackMS / 1000) do
+        for char, charTrackers in pairs(trackers) do
+            for index2, tracker in pairs(charTrackers) do
+                tracker:Destroy();
+                charTrackers[index2] = nil
             end
         end
     end
-end)
+end);
 
-local HandleTracking = function(Player, Character)
-    Trackers[Character] = {}
+local backup = {};
+local updateWeaponSettings = function() -- will change
+    local items = waitForChild(waitForChild(aliveCharacters[localPlayer], "Backpack"), "Items");
+    for index, value in pairs(filtergc("table", {
+        Keys = { "Controller", "Animators", "Model", "Slot", "Category" }
+    })) do
+        if (findFirstChild(items, value.Model)) then
+            local recoil = value.Recoil
+            if (recoil and type(recoil) == "table") then
+                local recoilSettings = recoil.Default
+                if (recoilSettings) then
+                    if (gunmodSettings.no_recoil) then
+                        if (not backup[value.Recoil.Default]) then
+                            backup[value.Recoil.Default] = {};
+                            for i, v in pairs(value.Recoil.Default) do
+                                backup[value.Recoil.Default][i] = v
+                            end
+                        end
+                        recoilSettings.RecoilMovement = vector2new(1, 1);
+                        recoilSettings.CameraRotationVariance = vector3new(1, 1);
+                        recoilSettings.RecoilMovementVariance = vector2new(1, 1);
+                        recoilSettings.RecoilRecenterTime = 0
+                        recoilSettings.RecoilMovementTime = 0
+                        recoilSettings.RecoilCrouchScale = 0
+                        recoilSettings.RecoileProneScale = 0
+                    else
+                        local backup = backup[value.Recoil.Default]
+                        if (backup) then
+                            recoilSettings.RecoilMovement = backup.RecoilMovement
+                            recoilSettings.CameraRotationVariance = backup.CameraRotationVariance
+                            recoilSettings.RecoilMovementVariance = backup.RecoilMovementVariance
+                            recoilSettings.RecoilRecenterTime = backup.RecoilRecenterTime
+                            recoilSettings.RecoilMovementTime = backup.RecoilMovementTime
+                            recoilSettings.RecoilCrouchScale = backup.RecoilCrouchScale
+                            recoilSettings.RecoileProneScale = backup.RecoileProneScale
+                        end
+                    end
+                end
+            end
+
+            local aim = value.Aim
+            if (type(aim) == "table" and type(aim.AimTime) == "number") then
+                if (gunmodSettings.instant_scope) then
+                    if (not backup[value.Aim]) then
+                        backup[value.Aim] = {};
+                        for i, v in pairs(value.Aim) do
+                            backup[value.Aim][i] = v
+                        end
+                    end
+                    aim.AimTime = 0
+                else
+                    local backup = backup[value.Aim]
+                    if (backup) then
+                        aim.AimTime = backup.AimTime
+                    end
+                end
+            end
+        end
+    end
+end
+
+local handleTracking = function(player, character) -- will remake
+    trackers[character] = {}
     while true do
-        if (Settings.Backtrack) then
-            local Root = Character:FindFirstChild("Root");
-            if (Root and Character.Parent) then
-                local Cloned = Instance.new("Part");
-                Cloned.CFrame = Root.CFrame
-                Cloned.Anchored = true
-                Cloned.CanCollide = false
-                Cloned.Transparency = Settings.ShowBacktrack and .4 or 1
-                Cloned.Size = Vector3.new(1.6, 4, 1.2);
-                Cloned.Parent = Workspace
-                table.insert(Trackers[Character], Cloned);
+        if (backtrackSettings.backtrack) then
+            local character = aliveCharacters[player]
+            if (character) then
+                local cloned = Instance.new("Part");
+                cloned.CFrame = character.Root.CFrame
+                cloned.Anchored = true
+                cloned.CanCollide = false
+                cloned.Transparency = 1
+                cloned.Size = Vector3.new(1.6, 4, 1.2);
+                cloned.Color = backtrackSettings.backtrack_color
+                cloned.Parent = Workspace
+                table.insert(trackers[character], cloned);
+                if (backtrackSettings.show_backtrack) then
+                    for i, tracker in pairs(trackers[character]) do
+                        if (i == 1) then
+                            tracker.Transparency = .4
+                        else
+                            tracker.Transparency = 1
+                        end
+                    end
+                end
             else
                 break;
             end
@@ -230,204 +330,694 @@ local HandleTracking = function(Player, Character)
     end
 end
 
-local IsEnemy = function(Player)
-    return Teams[LocalPlayer] ~= Teams[Player]
+local isEnemy = function(player)
+    local enemyTeam = teamsPlayers[player]
+    if (enemyTeam == "FFA") then
+        return true;
+    end
+    return enemyTeam ~= teamsPlayers[localPlayer];
+end
+local getTeamColor;
+do
+    local teamColorCache = {};
+    getTeamColor = function(team)
+        local cache = teamColorCache[team]
+        if (cache) then
+            return cache;
+        end
+        local color = findFirstChild(Services.Teams, team).Color
+        if (team) then
+            local value = color.Value
+            teamColorCache[team] = value
+            return value;
+        end
+    end
 end
 
-for Index, Player in pairs(Players:GetPlayers()) do
-    local Team = TS.Teams:GetPlayerTeam(Player);
-    Teams[Player] = Team
-
-    local Character = TS.Characters:GetCharacter(Player);
-    if (Character) then
-        Characters[Player] = Character
-        Character.AncestryChanged:Connect(function()
-            Characters[Player] = nil
-        end)
-        Character:WaitForChild("Root");
-        if (IsEnemy(Player)) then
-            task.spawn(HandleTracking, Player, Character);
-        end
-        if (Player == LocalPlayer) then
-            UpdateWeaponSettings();
-        end
-    end
+local addPlayerDrawings = function(player)
+    if (player == localPlayer) then return; end;
+    local char = aliveCharacters[player]
+    if (not char) then return; end
+    local root = waitForChild(char, "Root");
+    local charVisuals = Visuals:Add(root);
+    local esp_enabled = espSettings.enabled
+    charVisuals:AddText(player.Name, {
+        Offset = {0, 4},
+        Color = espSettings.color,
+        Visible = esp_enabled and espSettings.names_enabled
+    });
+    charVisuals:AddTracer(nil, {
+        Offset = {0, 1},
+        Color = espSettings.color,
+        Visible = esp_enabled and espSettings.tracers_enabled
+    });
+    charVisuals:AddChams(espSettings.chams_color, {
+        Adornee = char,
+        Enabled = esp_enabled and espSettings.chams_enabled,
+        FillColor = espSettings.chams_color,
+        OutlineColor = espSettings.chams_outline_color
+    });
+    charVisuals:Add2DBox(vector3new(root.Size.X, root.Size.Y), vector3new(-root.Size.X, -root.Size.Y), {
+        Color = espSettings.box_color,
+        Visible = esp_enabled and espSettings.box_esp
+    });
+    drawEntries[player] = charVisuals
 end
-TS.Characters.CharacterAdded:Connect(function(Player, Character)
-    Characters[Player] = Character
-    local Root = Character:WaitForChild("Root");
-    if (IsEnemy(Player)) then
-        HandleTracking(Player, Character);
-    end
-    Character.AncestryChanged:Connect(function()
-        Characters[Player] = nil
-    end)
-    if (Player == LocalPlayer) then
-        UpdateWeaponSettings();
-    end
-end)
-TS.Teams.TeamChanged:Connect(function(Player, Team)
-    Teams[Player] = Team
-end)
 
-local GetClosestPlayerVec2 = function()
-    local Closest = table.create(3);
-    local Vector2Distance = math.huge
-    local Vector3Distance = math.huge
-    local Hitbox = Characters[LocalPlayer] and Characters[LocalPlayer]:FindFirstChild("Hitbox");
-    for Player, Character in pairs(Characters) do
-        if (Player ~= LocalPlayer and Hitbox and IsEnemy(Player) and Character:FindFirstChild("Hitbox")) then
-            if (Hitbox.Parent.Health.Value > 0) then
-                local LocalRoot = Hitbox.Parent.Root
-                local Position = Character.Hitbox[Settings.Redirect].Position
-                local Tuple, Visible = CurrentCamera:WorldToViewportPoint(Position);
-                local CharacterVector = Vector2.new(Tuple.X, Tuple.Y);
-                local Vector2Magnitude = (MouseVector - CharacterVector).Magnitude;
+for i, team in pairs(Services.Teams:GetChildren()) do
+    team.Players.ChildAdded:Connect(function(obj)
+        local player = obj.Value
+        teamsPlayers[player] = team.Name
+    end);
+end
 
-                if (Visible and Vector2Magnitude <= Vector2Distance and Vector2Magnitude <= FOV.Radius and Settings.ClosestCursor) then
-                    Vector2Distance = Vector2Magnitude
-                    Closest = {Character, CharacterVector, Player}
+Players.PlayerRemoving:Connect(function(player)
+    aliveCharacters[player] = nil
+    local drawEntry = drawEntries[player]
+    if (drawEntry) then
+        drawEntry:Destroy();
+    end
+end);
+
+for index, player in pairs(Players:GetPlayers()) do
+    local Team = Teams:GetPlayerTeam(player);
+    teamsPlayers[player] = Team
+    local char = Characters:GetCharacter(player);
+    if (char) then
+        aliveCharacters[player] = char
+    end
+    if (player == localPlayer and char) then
+        updateWeaponSettings();
+    end
+    task.spawn(addPlayerDrawings, player);
+end
+
+Workspace.Characters.ChildAdded:Connect(function(char)
+    local root = waitForChild(char, "Root");
+    local player = Characters:GetPlayerFromCharacter(char);
+    aliveCharacters[player] = char
+    if (player == localPlayer) then
+        updateWeaponSettings();
+    end
+    addPlayerDrawings(player);
+end);
+
+local remoteCharKilled = findFirstChild(ReplicatedStorage, "RemoteCharacterKilled", true);
+remoteCharKilled.OnClientEvent:Connect(function(char)
+    local player = Characters:GetPlayerFromCharacter(char);
+    aliveCharacters[player] = nil
+    local drawEntry = drawEntries[player]
+    if (drawEntry) then
+        drawEntry:Destroy();
+    end
+end);
+
+local FOV = Drawing.new("Circle");
+FOV.Color = fovSettings.fov_color
+FOV.Thickness = 1
+FOV.Transparency = 1
+FOV.Filled = false
+FOV.Radius = fovSettings.fov_radius
+FOV.Position = mouseVector
+FOV.Visible = true
+
+local snapLine = Drawing.new("Line");
+snapLine.Color = fovSettings.fov_color
+snapLine.Thickness = .1
+snapLine.Transparency = 1
+snapLine.From = mouseVector
+
+local getClosestPlayer = function()
+    local closest = create(4);
+    local vector2Distance = math.huge
+    local vector3DistanceOnScreen = math.huge
+    local vector3Distance = math.huge
+
+    local localChar = aliveCharacters[localPlayer]
+    if (not localChar) then return; end;
+
+    local localHitbox = findFirstChild(localChar, "Hitbox");
+    for player, character in pairs(aliveCharacters) do
+        local hitbox = findFirstChild(character, "Hitbox");
+        if (player ~= localPlayer and localHitbox and hitbox) then
+            local localRoot = localChar.Root
+            local redirect = findFirstChild(hitbox, aimbotSettings.lock_on);
+            if (not redirect) then
+                continue;
+            end
+
+            local position = redirect.Position
+            local tuple, visible = worldtoscreen(currentCamera, position);
+            local characterVector = vector2new(tuple.X, tuple.Y) + inset;
+            local vector2Magnitude = (mouseVector - characterVector).Magnitude
+            local vector3Magnitude = (position - localRoot.Position).Magnitude
+            local inRenderDistance = vector3Magnitude <= espSettings.render_distance
+
+            local enemy = isEnemy(player);
+
+            if (visible and enemy and vector2Magnitude <= vector2Distance and vector2Magnitude <= FOV.Radius and aimbotSettings.closest_cursor) then
+                vector2Distance = vector2Magnitude
+                closest = {character, characterVector, player, redirect};
+            end
+
+            if (visible and enemy and vector3Magnitude <= vector3DistanceOnScreen and vector2Magnitude <= FOV.Radius and aimbotSettings.closest_player) then
+                vector3DistanceOnScreen = vector3Magnitude
+                closest = {character, characterVector, player, redirect};
+            end
+
+            if (vector3Magnitude <= vector3Distance and enemy) then
+                vector3Distance = vector3Magnitude
+                closest[5] = vector3Distance
+            end
+
+            local notBlacklisted = not tfind(espSettings.show_teams, teamsPlayers[player]);
+            if (espSettings.enabled and inRenderDistance and visible and notBlacklisted) then
+                local drawEntry = drawEntries[player]
+                local text = drawEntry:Get("TextDynamic");
+                local tracer = drawEntry:Get("LineDynamic");
+                local box = drawEntry:Get("RectDynamic");
+                local health = character.Health
+                text.Text = format("%s\n%s%s",
+                    espSettings.names_enabled and player.Name or "",
+                    espSettings.distance_enabled and format("[%s]",
+                        floor(vector3Magnitude)
+                    ) or "",
+                    espSettings.health_enabled and format(" [%s/%s]",
+                        floor(health.Value),
+                        floor(health.MaxHealth.Value)
+                    )  or ""
+                );
+
+                if (espSettings.team_colors) then
+                    local teamColor = getTeamColor(teamsPlayers[player]);
+                    text.Color = teamColor
+                    tracer.Color = teamColor
+                    box.Color = teamColor
                 end
 
-                local Vector3Magnitude = (Position - LocalRoot.Position).Magnitude
-                if (Visible and Vector3Magnitude <= Vector3Distance and Vector2Magnitude <= FOV.Radius and Settings.ClosestPlayer) then
-                    Vector3Distance = Vector3Magnitude
-                    Closest = {Character, CharacterVector, Player}
+                tracer.Visible = espSettings.tracers_enabled
+                text.Visible = espSettings.names_enabled
+                box.Visible = espSettings.box_esp
+
+            else
+                local drawEntry = drawEntries[player]
+                for index, drawing in pairs(drawEntry:Get()) do
+                    drawing.Visible = false
                 end
             end
         end
     end
-    return unpack(Closest);
+
+    return unpack(closest);
 end
 
-UserInputService.InputEnded:Connect(function(Key, GPE)
-    local KeyString = string.split(tostring(Key.KeyCode), ".")[3]
-    if (not GPE and Keys[KeyString]) then
-        Keys[KeyString] = false
+UserInputService.InputEnded:Connect(function(key, GPE)
+    local keyString = split(tostring(key.KeyCode), ".")[3]
+    if (not GPE and keys[keyString]) then
+        keys[keyString] = false
     end
 
-    if (Settings.Aimbot and Key.UserInputType == Settings.AimlockKey and Locked) then
-        Locked = false
+    if (aimbotSettings.aimbot and key.UserInputType == aimbotSettings.aimlock_key and locked) then
+        locked = false
     end
-end)
+end);
 
-
-UserInputService.InputBegan:Connect(function(Key, GPE)
-    local KeyString = string.split(tostring(Key.KeyCode), ".")[3]
+UserInputService.InputBegan:Connect(function(key, GPE)
+    local keyString = split(tostring(key.KeyCode), ".")[3]
     if (not GPE) then
-        Keys[KeyString] = true
+        keys[keyString] = true
     end
 
-    if (Settings.Aimbot and Key.UserInputType == Settings.AimlockKey) then
-        Locked = true
+    if (aimbotSettings.aimbot and key.UserInputType == aimbotSettings.aimlock_key) then
+        locked = true
     end
-end)
+end);
 
-RunService.RenderStepped:Connect(function()
-    MouseVector = Vector2.new(Mouse.X, Mouse.Y + 36);
+local backpack, equippedWeapon, ignoreList;
+local closestCharacter, vector, closestPlayer, redirect, vector3Magnitude;
+Services.RunService.RenderStepped:Connect(function()
+    mouseVector = vector2new(mouse.X, mouse.Y) + inset;
+    local localCharacter = aliveCharacters[localPlayer]
 
-    FOV.Position = MouseVector
-    SnapLine.From = MouseVector
-    local ClosestCharacter, Vector, Player = GetClosestPlayerVec2();
+    FOV.Position = mouseVector
+    snapLine.From = mouseVector
+    closestCharacter, vector, closestPlayer, redirect, vector3Magnitude = getClosestPlayer();
 
-    if (Locked) then
-        if (ClosestCharacter and Player) then
-            mousemoverel((Vector.X - MouseVector.X) / Settings.Smoothnes, (Vector.Y - MouseVector.Y) / Settings.Smoothnes);
+    if (locked) then
+        if (closestCharacter and closestPlayer) then
+            mousemoverel((vector.X - mouseVector.X) / aimbotSettings.smoothness, (vector.Y - mouseVector.Y) / aimbotSettings.smoothness);
         end
     end
 
-    if (Vector) then
-        SnapLine.To = Vector
-        SnapLine.Visible = true
+    if (vector and fovSettings.snaplines_enabled) then
+        snapLine.To = vector
+        snapLine.Visible = true
     else
-        SnapLine.Visible = false
+        snapLine.Visible = false
     end
-end)
 
-debug.setupvalue(TS.Projectiles.KillProjectile, 1, true);
-
-local OldInitProjectile = TS.Projectiles.InitProjectile
-TS.Projectiles.InitProjectile = function(...)
-    local Args = {...}
-    if (Settings.SilentAim or Settings.Backtrack and Args[5] == LocalPlayer) then
-        local ClosestCharacter, Vector, Player = GetClosestPlayerVec2();
-        local Hitbox;
-        if (ClosestCharacter and Player) then
-            Hitbox = ClosestCharacter.Hitbox
-            local Viewable = CurrentCamera:GetPartsObscuringTarget({CurrentCamera.CFrame.Position, Hitbox[Settings.Redirect].CFrame.Position}, {Characters[LocalPlayer], ClosestCharacter});
-            if (Settings.SilentAim and #Viewable == 0 or Settings.Wallbang) then
-                Args[3] = (Hitbox[Settings.Redirect].CFrame.Position + (Vector3.new(math.random(1, 10), math.random(1, 10), math.random(1, 10)) / 10)) - Args[4]
-                return OldInitProjectile(unpack(Args));
-            end
+    if (aimbotSettings.kill_aura and vector3Magnitude and vector3Magnitude < 75) then
+        if (not backpack) then
+            backpack = aliveCharacters[localPlayer].Backpack
         end
-
-        if (Settings.Backtrack) then
-            local UnitRay = Mouse.UnitRay
-            local LocalCharacter = Characters[LocalPlayer]
-            local IgnoreList = {LocalCharacter}
-            local EquippedWeapon = LocalCharacter.Backpack.Equipped.Value
-            for Index, Child in pairs(Workspace:GetChildren()) do
-                if (Child.Name == EquippedWeapon.Name) then
-                    table.insert(IgnoreList, Child);
-                end
+        local equipped = backpack.Equipped.value
+        local knife = backpack.Melee.value
+        Network:Fire("Item", "Equip", knife);
+        for index = 1, 3 do
+            if (localCharacter) then
+                Network:Fire("Item_Melee", "StabBegin", knife);
+                Network:Fire("Item_Melee", "Stab", knife, redirect, redirect.Position, (localCharacter.Root.CFrame * CFrame.Angles(0, -math.rad(-3 * 5), 0)).LookVector * (75 + -3));
             end
-            local Part = Workspace:FindPartOnRayWithIgnoreList(Ray.new(UnitRay.Origin, UnitRay.Direction * 1000), IgnoreList);
+            wait();
+        end
+        wait(1);
+        Network:Fire("Item", "Equip", equipped);
+    end
 
-            for Character, CharacterTrackers in pairs(Trackers) do
-                local DoBackTrack = table.find(CharacterTrackers, Part);
-                if (DoBackTrack and Hitbox) then
-                    Args[3] = (Hitbox[Settings.Redirect].CFrame.Position + (Vector3.new(math.random(1, 10), math.random(1, 10), math.random(1, 10)) / 10)) - Args[4]
-                    return OldInitProjectile(unpack(Args));
+    if (aimbotSettings.triggerbot) then
+        if (not backpack or backpack.Parent ~= localCharacter) then
+            if (not localCharacter) then return end
+            backpack = findFirstChild(localCharacter, "Backpack");
+            if (not backpack) then return end
+            ignoreList = {localCharacter};
+            equippedWeapon = localCharacter.Backpack.Equipped.value
+            if (not equippedWeapon) then return end
+            for index, child in pairs(Workspace:GetChildren()) do
+                if (child.Name == equippedWeapon.Name) then
+                    table.insert(ignoreList, child);
                 end
             end
         end
 
-    end
-    return OldInitProjectile(...);
-end
-
-local CheckPlayers;
-CheckPlayers = function()
-    if (Settings.Triggerbot) then
-        local UnitRay = Mouse.UnitRay
-        local LocalCharacter = Characters[LocalPlayer]
-        if (not LocalCharacter) then return end
-        local Backpack = LocalCharacter:FindFirstChild("Backpack");
-        if (not Backpack) then return end
-        local IgnoreList = {LocalCharacter}
-        local EquippedWeapon = LocalCharacter.Backpack.Equipped.Value
-        for Index, Child in pairs(Workspace:GetChildren()) do
-            if (Child.Name == EquippedWeapon.Name) then
-                table.insert(IgnoreList, Child);
-            end
-        end
-        local Part = Workspace:FindPartOnRayWithIgnoreList(Ray.new(UnitRay.Origin, UnitRay.Direction * 1000), IgnoreList);
-        local IsPlayer;
-        for Player, Character in pairs(Characters) do
-            if (Part and IsEnemy(Player) and Part:IsDescendantOf(Character)) then
-                IsPlayer = true
+        local unitRay = Mouse.UnitRay
+        local part = findPartOnRayWithIgnoreList(Workspace, Ray.new(unitRay.Origin, unitRay.Direction * 1000), ignoreList);
+        local isPlayer;
+        for player, character in pairs(aliveCharacters) do
+            if (part and isEnemy(player) and part:IsDescendantOf(character)) then
+                isPlayer = true
                 break;
             end
         end
-        if (IsPlayer) then
-            wait(Settings.TriggerbotMS / 1000);
-            mouse1press();
+        if (isPlayer) then
+            wait(aimbotSettings.triggerbotMS / 1000)
+            mouse1press(); -- change to fire wep func instead of mouse1press
             mouse1release();
-            wait();
-            CheckPlayers();
         end
     end
-end
 
-Mouse.Move:Connect(CheckPlayers);
+    if (characterSettings.color_weapon) then
+        if (localCharacter) then
+            equippedWeapon = localCharacter.Backpack.Equipped.value
+            if (not equippedWeapon) then
+                return;
+            end
+            local weaponBody;
+            for index, child in pairs(Workspace:GetChildren()) do
+                if (child.Name == equippedWeapon.Name) then
+                    weaponBody = child.Body
+                end
+            end
+            if (not weaponBody) then
+                return;
+            end
+            local parts = {};
+            for i,part in pairs(weaponBody:GetDescendants()) do
+                if (IsA(part, "MeshPart") or IsA(part, "Part")) then
+                    table.insert(parts, part);
+                end
+            end
 
-Settings.NoRecoil = true
-Settings.Triggerbot = true
-Settings.Aimbot = true
-Settings.InstantAimTime = true
-Settings.ClosestCursor = true
-Settings.Backtrack = true
-Settings.ShowBacktrack = true
-if (Characters[LocalPlayer]) then
-    UpdateWeaponSettings();
-end
+            for i = 1, #parts do
+                local part = parts[i]
+                part.Color = characterSettings.weapon_color
+                if (part.Material ~= Enum.Material[characterSettings.weapon_material]) then
+                    part.Material = Enum.Material[characterSettings.weapon_material]
+                end
+            end
+        end
+    end
+
+    if (characterSettings.color_arms) then
+        local arms = findFirstChild(Workspace, "Arms");
+        local parts = {};
+        for i, part in pairs(arms:GetDescendants()) do
+            if (IsA(part, "MeshPart") or IsA(part, "Part")) then
+                table.insert(parts, part);
+            end
+        end
+
+        for i = 1, #parts do
+            local part = parts[i]
+            part.Color = characterSettings.arms_color
+            if (part.Material ~= Enum.Material[characterSettings.arm_material]) then
+                part.Material = Enum.Material[characterSettings.arm_material]
+            end
+        end
+    end
+end);
+
+task.spawn(function()
+    local mt = setmetatable({}, {});
+    mt.__index = mt
+    while wait() do
+        local char = aliveCharacters[localPlayer]
+        if (movementSettings.bhop and char) then
+            debug.setupvalue(changestate, 16, 9e9);
+            debug.setupvalue(changestate, 23, 0);
+            debug.setupvalue(changestate, 13, mt);
+            changestate("Jump", false);
+            char.State.Grounded.Changed:Wait();
+        end
+    end
+end);
+
+local vector3new;
+vector3new = hookfunction(getrenv().Vector3.new, function(...)
+    local caller = debug.getinfo(2, "n");
+    if (caller.name == "GetMovementInput") then
+        if (select("#", ...) == 0) then
+            if (movementSettings.auto_strafe) then
+                changestate("Sprint", false);
+                return vector3new(0, 0, -8);
+            end
+        end
+    end
+    return vector3new(...);
+end);
+
+hookfunction(getspeed, function()
+    return -movementSettings.walkspeed / 16 + 1
+end);
+
+local initProjectile;
+initProjectile = hookfunction(TS.Projectiles.InitProjectile, function(...)
+    local args = {...}
+    if (silentAimSettings.silent_aim or backtrackSettings.backtrack and args[5] == localPlayer) then
+        local hitbox;
+        if (closestCharacter and closestPlayer) then
+            hitbox = closestCharacter.Hitbox
+            local viewable = currentCamera:GetPartsObscuringTarget({currentCamera.CFrame.Position, hitbox[aimbotSettings.lock_on].CFrame.Position}, {aliveCharacters[localPlayer], closestCharacter});
+            if (silentAimSettings.silent_aim and #viewable == 0 or silentAimSettings.wallbang) then
+                args[3] = (hitbox[aimbotSettings.lock_on].CFrame.Position + (Vector3.new(random(1, 10), random(1, 10), random(1, 10)) / 10)) - args[4]
+                return initProjectile(unpack(args));
+            end
+        end
+
+        if (backtrackSettings.backtrack) then
+            local unitRay = mouse.UnitRay
+            local localCharacter = aliveCharacters[localPlayer]
+            local ignoreList = {localCharacter}
+            if (localCharacter) then
+                local equippedWeapon = localCharacter.Backpack.Equipped.value
+                for index, child in pairs(Workspace:GetChildren()) do
+                    if (child.Name == equippedWeapon.Name) then
+                        table.insert(ignoreList, child);
+                    end
+                end
+                local part = findPartOnRayWithIgnoreList(Workspace, Ray.new(unitRay.Origin, unitRay.Direction * 1000), ignoreList);
+
+                for character, characterTrackers in pairs(trackers) do
+                    local DoBackTrack = table.find(characterTrackers, part);
+                    if (DoBackTrack and hitbox) then
+                        args[3] = (hitbox[aimbotSettings.lock_on].CFrame.Position + (Vector3.new(random(1, 10), random(1, 10), random(1, 10)) / 10)) - args[4]
+                        return initProjectile(unpack(args));
+                    end
+                end
+            end
+        end
+    end
+    return initProjectile(...);
+end);
+
+
+local mainWindow = UILibrary:CreateWindow("Fate Hub", "Bad Business", Color3.fromRGB(100, 0, 255));
+
+local visuals = mainWindow:Tab("Visuals");
+local players_esp = visuals:Section("ESP");
+local team_colors = espSettings.team_colors
+players_esp:Toggle("Enable Esp", espSettings.enabled, function(callback)
+    espSettings.enabled = callback
+    Visuals:SetProperties("Box", {
+        Visible = callback and espSettings.box_esp
+    });
+    Visuals:SetProperties("Chams", {
+        Visible = callback and espSettings.chams_enabled
+    });
+    Visuals:SetProperties("Text", {
+        Visible = callback and espSettings.names_enabled
+    });
+    Visuals:SetProperties("Line", {
+        Visible = callback and espSettings.tracers_enabled
+    });
+end):Colorpicker(espSettings.color, function(callback)
+    espSettings.team_colors = false
+    espSettings.color = callback
+    Visuals:SetProperties({"Box", "Text", "Line"}, {
+        Color = callback
+    });
+    Visuals:SetProperties("Chams", {
+        FillColor = callback
+    });
+end);
+espSettings.team_colors = team_colors
+players_esp:Toggle("Show Names", espSettings.names_enabled, function(callback)
+    espSettings.names_enabled = callback
+end);
+players_esp:Toggle("Show Health", espSettings.health_enabled, function(callback)
+    espSettings.health_enabled = callback
+end);
+players_esp:Toggle("Health bar", espSettings.healthbar_enabled, function(callback)
+    espSettings.healthbar_enabled = true
+end);
+players_esp:Toggle("Show Distance", espSettings.distance_enabled, function(callback)
+    espSettings.distance_enabled = callback
+end);
+players_esp:Toggle("Box Esp", espSettings.box_esp, function(callback)
+    espSettings.box_esp = callback
+    Visuals:SetProperties("Box", {
+        Visible = callback
+    });
+end):Colorpicker(espSettings.box_color, function(callback)
+    espSettings.box_color = callback
+    Visuals:SetProperties("Box", {
+        Color = callback
+    });
+end);
+players_esp:Toggle("Enable Chams", espSettings.chams_enabled, function(callback)
+    espSettings.chams_enabled = callback
+    Visuals:SetProperties("Chams", {
+        Visible = callback
+    });
+end):Colorpicker(espSettings.chams_color, function(callback)
+    espSettings.chams_color = callback
+    Visuals:SetProperties("Chams", {
+        FillColor = callback
+    });
+end);
+players_esp:Toggle("Enable Tracers", espSettings.tracers_enabled, function(callback)
+    espSettings.tracers_enabled = callback
+    Visuals:SetProperties("Line", {
+        Visible = callback
+    });
+end):Colorpicker(espSettings.tracer_color, function(callback)
+    espSettings.tracer_color = callback
+    Visuals:SetProperties("Line", {
+        Color = callback
+    });
+end);
+players_esp:Toggle("Chams Outline", espSettings.chams_outline, function(callback)
+    espSettings.chams_outline = callback
+    Visuals:SetProperties("Chams", {
+        OutlineTransparency = callback and 0 or 1
+    });
+end):Colorpicker(espSettings.chams_outline_color, function(callback)
+    espSettings.chams_outline_color = callback
+    Visuals:SetProperties("Chams", {
+        OutlineColor = callback
+    });
+end);
+players_esp:Toggle("Team Colors", team_colors, function(callback)
+    espSettings.team_colors = callback
+    if (not callback) then
+        Visuals:SetProperties({"Line", "Text", "Box"}, {
+            Color = espSettings.color
+        });
+    end
+end);
+players_esp:Dropdown("Teams", "All", { "Enemies", "Allies", "All" }, function(callback)
+    table.clear(espSettings.show_teams);
+    if (callback == "Enemies") then
+        table.insert(espSettings.show_teams, teamsPlayers[localPlayer]);
+    end
+    if (callback == "Allies") then
+        local teamsChildren = Services.Teams:GetChildren();
+        local teamsNames = {};
+        for i, team in pairs(teamsChildren) do
+            local teamName = team.Name
+            if (teamName ~= teamsPlayers[localPlayer]) then
+                table.insert(teamsNames, team.Name)
+            end
+        end
+        espSettings.show_teams = teamsNames
+    end
+end);
+players_esp:Dropdown("Tracer To", espSettings.tracer_to, {"Head", "Chest"}, function(callback)
+    espSettings.tracer_to = callback
+end);
+
+players_esp:Dropdown("Tracer From", "Bottom", { "Top", "Bottom", "Left", "Right" }, function(callback)
+    local positions = {
+        Top = vector2new(viewportSize.X / 2, viewportSize.Y - viewportSize.Y),
+        Bottom = vector2new(viewportSize.X / 2, viewportSize.Y),
+        Left = vector2new(viewportSize.X - viewportSize.X, viewportSize.Y / 2),
+        Right = vector2new(viewportSize.X, viewportSize.Y / 2)
+    };
+    Visuals:SetProperties("Line", {
+        From = Point2D.new(positions[callback]);
+    });
+end);
+players_esp:Slider("Render Distance", 0, 50000, math.clamp(espSettings.render_distance, 0, 50000), function(callback)
+    espSettings.render_distance = callback
+end, false);
+
+local character = visuals:Section("Self");
+character:Toggle("Arms Color", characterSettings.color_arms, function(callback)
+    characterSettings.color_arms = callback
+end):Colorpicker(characterSettings.arms_color, function(callback)
+    characterSettings.arms_color = callback
+end);
+
+character:Dropdown("Arms Material", characterSettings.arm_material, { "SmoothPlastic", "ForceField", "Neon", "Glass" }, function(callback)
+    characterSettings.arm_material = callback
+end);
+
+character:Toggle("Weapon Color", characterSettings.color_weapon, function(callback)
+    characterSettings.color_weapon = callback
+end):Colorpicker(characterSettings.weapon_color, function(callback)
+    characterSettings.weapon_color = callback
+end);
+character:Dropdown("Weapon Material", characterSettings.weapon_material, { "SmoothPlastic", "ForceField", "Neon", "Glass" }, function(callback)
+    characterSettings.weapon_material = callback
+end);
+
+visuals:Section("");
+
+local world = visuals:Section("World");
+world:Toggle("No Shadows", false, function(callback)
+
+end);
+
+visuals:Section("");
+
+local other = visuals:Section("Other");
+other:Toggle("Show Backtrack Hitbox", backtrackSettings.show_backtrack, function(callback)
+    backtrackSettings.show_backtrack = callback
+end):Colorpicker(backtrackSettings.backtrack_color, function(callback)
+    backtrackSettings.backtrack_color = callback
+end);
+other:Toggle("Third Person", characterSettings.third_person, function(callback)
+    characterSettings.third_person = callback
+end);
+other:Slider("Offset X", -15, 15, characterSettings.third_person_values[1], function(callback)
+    characterSettings.third_person_values[1] = callback
+end);
+other:Slider("Offset Y", -15, 15, characterSettings.third_person_values[2], function(callback)
+    characterSettings.third_person_values[2] = callback
+end);
+other:Slider("Offset Z", -15, 15, characterSettings.third_person_values[3], function(callback)
+    characterSettings.third_person_values[3] = callback
+end);
+
+local legit = mainWindow:Tab("Legit");
+local aim = legit:Section("Aim");
+aim:Toggle("Enable Aimbot", aimbotSettings.aimbot, function(callback)
+    aimbotSettings.aimbot = callback
+end):Keybind(aimbotSettings.aimlock_key, function(callback)
+    aimbotSettings.aimlock_key = callback
+end);
+aim:Toggle("Enable TriggerBot", aimbotSettings.triggerbot, function(callback)
+    aimbotSettings.triggerbot = callback
+end);
+aim:Toggle("Silent Aim", silentAimSettings.silent_aim, function(callback)
+    silentAimSettings.silent_aim = callback
+end);
+aim:Toggle("Show FOV", fovSettings.fov_enabled, function(callback)
+    fovSettings.fov_enabled = callback
+    FOV.Visible = callback
+end):Colorpicker(fovSettings.snaplines_color, function(callback)
+    fovSettings.fov_color = callback
+    FOV.Color = callback
+end);
+aim:Toggle("Show Snaplines", fovSettings.snaplines_enabled, function(callback)
+    fovSettings.snaplines_enabled = callback
+end):Colorpicker(fovSettings.snaplines_color, function(callback)
+    fovSettings.snaplines_color = callback
+    snapLine.Color = callback
+end);
+aim:Slider("TriggerBot MS", 0, 3000, aimbotSettings.triggerbotMS, function(callback)
+    aimbotSettings.triggerbotMS = callback
+end, false);
+aim:Slider("Lock Smoothness", 1, 10, aimbotSettings.smoothness, function(callback)
+    aimbotSettings.smoothness = callback
+end, false);
+aim:Dropdown("Aimlock Part", aimbotSettings.redirect, {"Head", "Chest"}, function(callback)
+    aimbotSettings.redirect = callback
+end);
+
+local backtrack = legit:Section("Backtrack");
+backtrack:Toggle("Enable Backtracking", backtrackSettings.backtrack, function(callback)
+    backtrackSettings.backtrack = callback
+end);
+
+backtrack:Slider("Backtrack MS", 0, 3000, backtrackSettings.backtrackMS, function(callback)
+    backtrackSettings.backtrackMS = callback
+end, false);
+backtrack:Dropdown("Backtrack redirect", backtrackSettings.redirect, {"Head", "Chest"}, function(callback)
+    backtrackSettings.BacktrackRedirect = callback
+end);
+
+local rage = mainWindow:Tab("Rage");
+
+local ragemain = rage:Section("Main");
+ragemain:Toggle("Ragebot", false, function()
+
+end);
+
+local gunMods = rage:Section("Gun Mods");
+
+gunMods:Toggle("No Recoil", gunmodSettings.no_recoil, function(callback)
+    gunmodSettings.no_recoil = callback
+    updateWeaponSettings();
+end);
+gunMods:Toggle("Instant Scope", gunmodSettings.instant_scope, function(callback)
+    gunmodSettings.instant_scope = callback
+    updateWeaponSettings();
+end);
+gunMods:Toggle("Instant Reload", gunmodSettings.instant_reload, function(callback)
+
+end);
+gunMods:Toggle("Wallbang", gunmodSettings.wallbang, function(callback)
+    gunmodSettings.wallbang = callback
+end);
+
+local ragebot = rage:Section("RageBot");
+
+local other = mainWindow:Tab("Other");
+local movement = other:Section("Movement");
+
+movement:Toggle("Auto Strafe", movementSettings.auto_strafe, function(callback)
+    movementSettings.auto_strafe = callback
+end);
+movement:Toggle("Bhop", movementSettings.bhop, function(callback)
+    movementSettings.bhop = callback
+end);
+movement:Toggle("Fly", false, function(callback)
+    if (callback) then
+        flyChar(currentCamera, aliveCharacters[localPlayer].Root, 5);
+    else
+        flying = false
+    end
+end);
+movement:Slider("Walkspeed", 0, 150, movementSettings.walkspeed, function(callback)
+    movementSettings.walkspeed = callback
+end);
