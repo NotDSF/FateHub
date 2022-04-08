@@ -357,6 +357,9 @@ do
     local Player = Window:Tab("Player");
     local Main = Player:Section("Main");
 
+    Main:Toggle("Infinite Jump", false, function(value) Flags.InfJump = value; end);
+    Main:Toggle("Noclip", false, function(value) Flags.NoClip = value; end);
+
     Main:Slider("WalkSpeed", 1, 200, LocalPlayer.Character.Humanoid.WalkSpeed, function(value) 
         Flags.WalkSpeed = value;
     end);
@@ -513,6 +516,21 @@ GPlayers.PlayerAdded.Connect(GPlayers.PlayerAdded, function(player)
     end;
 end);
 
+local Space = Enum.KeyCode.Space;
+UserInputService.InputBegan:Connect(function(input) 
+    if input.KeyCode == Space and Flags.InfJump and equipped.Value ~= "none" then
+        LocalPlayer.Character.Humanoid:ChangeState(3);
+    end;
+end);
+
+LocalPlayer.Character.UpperTorso.Touched:Connect(function(part) 
+    if not Flags.NoClip or not part.CanCollide then return end;
+
+    part.CanCollide = false;
+    wait(1);
+    part.CanCollide = true;
+end);
+
 Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
     local RGB = fromHSV((Tick() / 5) % 1, 1, 1);
 
@@ -524,32 +542,35 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
 
             v.Text.Visible = Distance < Flags.ESPMaxDistance;
             v.Rect.Visible = Distance < Flags.ESPMaxDistance;
-            v.Rect.Thickness = Flags.ESPBoxThickness;
 
-            -- I hate this CODE
-            if Player.TeamColor == LocalPlayer.TeamColor then
-                Color = Flags.ESPTeamColor;
-                if Flags.RainbowTeam then
-                    Color = RGB;
-                    BoxTeamColor:UpdateColor(Color);
+            if Distance < Flags.ESPMaxDistance then
+                v.Rect.Thickness = Flags.ESPBoxThickness;
+
+                -- I hate this CODE
+                if Player.TeamColor == LocalPlayer.TeamColor then
+                    Color = Flags.ESPTeamColor;
+                    if Flags.RainbowTeam then
+                        Color = RGB;
+                        BoxTeamColor:UpdateColor(Color);
+                    end;
+    
+                    v.Text.Visible = Flags.ShowTeam;
+                    v.Rect.Visible = Flags.ShowTeam;
+                else
+                    Color = Flags.ESPEnemyColor;
+                    if Flags.RainbowEnemmy then
+                        Color = RGB;
+                        BoxEnemyColor:UpdateColor(Color);
+                    end;
+    
+                    v.Text.Visible = Flags.ShowEnemy;
+                    v.Rect.Visible = Flags.ShowEnemy;
                 end;
-
-                v.Text.Visible = Flags.ShowTeam;
-                v.Rect.Visible = Flags.ShowTeam;
-            else
-                Color = Flags.ESPEnemyColor;
-                if Flags.RainbowEnemmy then
-                    Color = RGB;
-                    BoxEnemyColor:UpdateColor(Color);
-                end;
-
-                v.Text.Visible = Flags.ShowEnemy;
-                v.Rect.Visible = Flags.ShowEnemy;
+    
+                v.Text.Text = format("%s | %d", Player.Name, Distance);
+                v.Text.Color = Color;
+                v.Rect.Color = Color;
             end;
-
-            v.Text.Text = format("%s | %d | [%d/100]", Player.Name, Distance, Character.Humanoid.Health);
-            v.Text.Color = Color;
-            v.Rect.Color = Color;
         end;
     end;
 
@@ -561,23 +582,25 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
 
             v.Line.Visible = Distance < Flags.ESPMaxDistance;
 
-            if Player.TeamColor == LocalPlayer.TeamColor then
-                Color = Flags.ESPTeamColor;
-                if Flags.RainbowTeam then
-                    Color = RGB;
-                    BoxTeamColor:UpdateColor(Color);
+            if Distance < Flags.ESPMaxDistance then
+                if Player.TeamColor == LocalPlayer.TeamColor then
+                    Color = Flags.ESPTeamColor;
+                    if Flags.RainbowTeam then
+                        Color = RGB;
+                        BoxTeamColor:UpdateColor(Color);
+                    end;
+                    v.Line.Visible = Flags.ShowTeam;
+                else
+                    Color = Flags.ESPEnemyColor;
+                    if Flags.RainbowEnemmy then
+                        Color = RGB;
+                        BoxEnemyColor:UpdateColor(Color);
+                    end;
+                    v.Line.Visible = Flags.ShowEnemy;
                 end;
-                v.Line.Visible = Flags.ShowTeam;
-            else
-                Color = Flags.ESPEnemyColor;
-                if Flags.RainbowEnemmy then
-                    Color = RGB;
-                    BoxEnemyColor:UpdateColor(Color);
-                end;
-                v.Line.Visible = Flags.ShowEnemy;
+    
+                v.Line.Color = Color;
             end;
-
-            v.Line.Color = Color;
         end;
     end;
 
