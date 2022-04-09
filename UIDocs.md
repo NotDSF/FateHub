@@ -22,7 +22,9 @@ Toggle:
 Section:Toggle(<string name>, <bool default?>, <function callback>)
 
 Toggle:UpdateToggle(<bool set>)
-Toggle:UpdateTitle(<string name>
+Toggle:UpdateTitle(<string name>)
+Toggle:Colorpicker(<Color3> defaultColor, <function callback>)
+Toggle:Keybind(<KeyCode> defaultBind, <function callback>)
 ```
 
 Dropdown:
