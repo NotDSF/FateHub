@@ -26,8 +26,10 @@ local inset = Services.GuiService:GetGuiInset();
 local findFirstChild = game.FindFirstChild
 local waitForChild = game.WaitForChild
 local findPartOnRayWithIgnoreList = Workspace.FindPartOnRayWithIgnoreList
+local GetPartsObscuringTarget = currentCamera.GetPartsObscuringTarget
 
 local cframenew = CFrame.new
+local cframe_angles = CFrame.Angles
 local vector3new = Vector3.new
 local vector2new = Vector2.new
 local color3new = Color3.new
@@ -36,9 +38,11 @@ local wait = task.wait
 local split = string.split
 local format = string.format
 local floor = math.floor
+local rad = math.rad
 local random = math.random
 local create = table.create
 local tfind = table.find
+local insert = table.insert
 local IsA = game.IsA
 
 local TS = filtergc("table", {
@@ -66,15 +70,16 @@ local settings = {
         no_recoil = false,
         instant_scope = false,
         instant_reload = false,
+        no_wep_shake = false,
         fire_mode = nil,
         fire_rate = 750
     },
 
     fov = {
-        fov_enabled = true,
+        fov_enabled = false,
         fov_color = color3new(1, 1, 1),
         fov_radius = 150,
-        snaplines_enabled = true,
+        snaplines_enabled = false,
         snaplines_color = color3new(1, 1, 1)
     },
 
@@ -87,11 +92,6 @@ local settings = {
         closest_player = false,
         triggerbot = false,
         triggerbotMS = 0,
-    },
-
-    silent_aim = {
-        silent_aim = false,
-        wallbang = false,
     },
 
     backtrack = {
@@ -122,7 +122,11 @@ local settings = {
 
     rage = {
         kill_aura = false,
-        rage_bot = false
+        rage_bot = false,
+        auto_shoot = false,
+        silent_aim = false,
+        wallbang = false,
+        redirect = "Head"
     },
 
     esp = {
@@ -149,13 +153,14 @@ local settings = {
         color = fromRGB(20, 226, 207),
         outline_color = color3new(),
         tracer_to = "Head",
+        show_team = "Enemies",
         show_teams = {};
     }
 };
 local espSettings = settings.esp
 local characterSettings = settings.character
 local aimbotSettings = settings.aimbot
-local silentAimSettings = settings.silent_aim
+local rageSettings = settings.rage
 local fovSettings = settings.fov
 local gunmodSettings = settings.gunmods
 local backtrackSettings = settings.backtrack
@@ -240,6 +245,8 @@ end);
 
 local backup = {};
 local updateWeaponSettings = function() -- will change
+    if (not aliveCharacters[localPlayer]) then return; end;
+
     local items = waitForChild(waitForChild(aliveCharacters[localPlayer], "Backpack"), "Items");
     for index, value in pairs(filtergc("table", {
         Keys = { "Controller", "Animators", "Model", "Slot", "Category" }
@@ -249,22 +256,23 @@ local updateWeaponSettings = function() -- will change
             if (recoil and type(recoil) == "table") then
                 local recoilSettings = recoil.Default
                 if (recoilSettings) then
-                    if (gunmodSettings.no_recoil) then
-                        if (not backup[value.Recoil.Default]) then
-                            backup[value.Recoil.Default] = {};
-                            for i, v in pairs(value.Recoil.Default) do
-                                backup[value.Recoil.Default][i] = v
-                            end
+                    if (not backup[recoilSettings]) then
+                        backup[recoilSettings] = {};
+                        for i, v in pairs(recoilSettings) do
+                            backup[recoilSettings][i] = v
                         end
+                    end
+
+                    if (gunmodSettings.no_recoil) then
                         recoilSettings.RecoilMovement = vector2new(1, 1);
                         recoilSettings.CameraRotationVariance = vector3new(1, 1);
                         recoilSettings.RecoilMovementVariance = vector2new(1, 1);
                         recoilSettings.RecoilRecenterTime = 0
                         recoilSettings.RecoilMovementTime = 0
                         recoilSettings.RecoilCrouchScale = 0
-                        recoilSettings.RecoileProneScale = 0
+                        recoilSettings.RecoilProneScale = 0
                     else
-                        local backup = backup[value.Recoil.Default]
+                        local backup = backup[recoilSettings]
                         if (backup) then
                             recoilSettings.RecoilMovement = backup.RecoilMovement
                             recoilSettings.CameraRotationVariance = backup.CameraRotationVariance
@@ -272,10 +280,26 @@ local updateWeaponSettings = function() -- will change
                             recoilSettings.RecoilRecenterTime = backup.RecoilRecenterTime
                             recoilSettings.RecoilMovementTime = backup.RecoilMovementTime
                             recoilSettings.RecoilCrouchScale = backup.RecoilCrouchScale
-                            recoilSettings.RecoileProneScale = backup.RecoileProneScale
+                            recoilSettings.RecoilProneScale = backup.RecoilProneScale
+                        end
+                    end
+
+                    if (gunmodSettings.no_wep_shake) then
+                        for i, v in pairs(recoilSettings) do
+                            if (type(v) == "vector") then
+                                recoilSettings[i] = vector3new(0, 0);
+                            end
+                        end
+                    else
+                        local backup = backup[recoilSettings]
+                        for i, v in pairs(recoilSettings) do
+                            if (type(v) == "vector") then
+                                recoilSettings[i] = backup[i]
+                            end
                         end
                     end
                 end
+                
             end
 
             local aim = value.Aim
@@ -295,6 +319,7 @@ local updateWeaponSettings = function() -- will change
                     end
                 end
             end
+
         end
     end
 end
@@ -449,10 +474,11 @@ snapLine.Transparency = 1
 snapLine.From = mouseVector
 
 local getClosestPlayer = function()
-    local closest = create(4);
+    local closest = create(6);
     local vector2Distance = math.huge
     local vector3DistanceOnScreen = math.huge
     local vector3Distance = math.huge
+    local noPartsVector3Distance = math.huge
 
     local localChar = aliveCharacters[localPlayer]
     if (not localChar) then return; end;
@@ -463,6 +489,7 @@ local getClosestPlayer = function()
         if (player ~= localPlayer and localHitbox and hitbox) then
             local localRoot = localChar.Root
             local redirect = findFirstChild(hitbox, aimbotSettings.lock_on);
+            local redirect_rage = findFirstChild(hitbox, rageSettings.redirect);
             if (not redirect) then
                 continue;
             end
@@ -478,17 +505,23 @@ local getClosestPlayer = function()
 
             if (visible and enemy and vector2Magnitude <= vector2Distance and vector2Magnitude <= FOV.Radius and aimbotSettings.closest_cursor) then
                 vector2Distance = vector2Magnitude
-                closest = {character, characterVector, player, redirect};
+                closest = {character, characterVector, player, {redirect, redirect_rage}, vector3Magnitude, closest[6]};
             end
 
             if (visible and enemy and vector3Magnitude <= vector3DistanceOnScreen and vector2Magnitude <= FOV.Radius and aimbotSettings.closest_player) then
                 vector3DistanceOnScreen = vector3Magnitude
-                closest = {character, characterVector, player, redirect};
+                closest = {character, characterVector, player, {redirect, redirect_rage}, vector3Magnitude, closest[6]};
             end
 
             if (vector3Magnitude <= vector3Distance and enemy) then
                 vector3Distance = vector3Magnitude
                 closest[5] = vector3Distance
+            end
+
+            local parts = GetPartsObscuringTarget(currentCamera, {currentCamera.CFrame.Position, redirect_rage.CFrame.Position}, {localChar, character});
+            if (enemy and #parts == 0 and vector3Magnitude <= noPartsVector3Distance) then
+                noPartsVector3Distance = vector3Magnitude
+                closest[6] = character
             end
 
             local notBlacklisted = not tfind(espSettings.show_teams, teamsPlayers[player]);
@@ -555,14 +588,14 @@ UserInputService.InputBegan:Connect(function(key, GPE)
 end);
 
 local backpack, equippedWeapon, ignoreList;
-local closestCharacter, vector, closestPlayer, redirect, vector3Magnitude;
+local closestCharacter, vector, closestPlayer, redirect, vector3Magnitude, closestViewable;
 Services.RunService.RenderStepped:Connect(function()
     mouseVector = vector2new(mouse.X, mouse.Y) + inset;
     local localCharacter = aliveCharacters[localPlayer]
 
     FOV.Position = mouseVector
     snapLine.From = mouseVector
-    closestCharacter, vector, closestPlayer, redirect, vector3Magnitude = getClosestPlayer();
+    closestCharacter, vector, closestPlayer, redirect, vector3Magnitude, closestViewable = getClosestPlayer();
 
     if (locked) then
         if (closestCharacter and closestPlayer) then
@@ -577,22 +610,21 @@ Services.RunService.RenderStepped:Connect(function()
         snapLine.Visible = false
     end
 
-    if (aimbotSettings.kill_aura and vector3Magnitude and vector3Magnitude < 75) then
+    if (rageSettings.kill_aura and vector3Magnitude and vector3Magnitude < 50 and closestCharacter) then
         if (not backpack) then
             backpack = aliveCharacters[localPlayer].Backpack
         end
         local equipped = backpack.Equipped.value
         local knife = backpack.Melee.value
         Network:Fire("Item", "Equip", knife);
+        local redirect_rage = redirect[2]
         for index = 1, 3 do
             if (localCharacter) then
                 Network:Fire("Item_Melee", "StabBegin", knife);
-                Network:Fire("Item_Melee", "Stab", knife, redirect, redirect.Position, (localCharacter.Root.CFrame * CFrame.Angles(0, -math.rad(-3 * 5), 0)).LookVector * (75 + -3));
+                Network:Fire("Item_Melee", "Stab", knife, redirect_rage, redirect_rage.Position, (localCharacter.Root.CFrame * cframe_angles(0, -rad(-3 * 5), 0)).LookVector * (75 + -3));
             end
             wait();
         end
-        wait(1);
-        Network:Fire("Item", "Equip", equipped);
     end
 
     if (aimbotSettings.triggerbot) then
@@ -675,6 +707,11 @@ Services.RunService.RenderStepped:Connect(function()
             end
         end
     end
+
+    if (rageSettings.auto_shoot and closestViewable) then
+        mouse1press();
+        mouse1release();
+    end
 end);
 
 task.spawn(function()
@@ -682,28 +719,43 @@ task.spawn(function()
     mt.__index = mt
     while wait() do
         local char = aliveCharacters[localPlayer]
-        if (movementSettings.bhop and char) then
-            debug.setupvalue(changestate, 16, 9e9);
-            debug.setupvalue(changestate, 23, 0);
-            debug.setupvalue(changestate, 13, mt);
-            changestate("Jump", false);
-            char.State.Grounded.Changed:Wait();
+        local state;
+        if (char) then
+            state = findFirstChild(char, "State");
+            if (movementSettings.bhop and state) then
+                debug.setupvalue(changestate, 16, 9e9);
+                debug.setupvalue(changestate, 23, 0);
+                debug.setupvalue(changestate, 13, mt);
+                changestate("Jump", false);
+                -- state.Grounded.Changed:Wait();
+                local grounded = state.Grounded
+                local isGrounded = grounded.Value
+                repeat
+                    task.wait();
+                until grounded.Value ~= isGrounded or not aliveCharacters[localPlayer]
+            end
+            if (movementSettings.auto_strafe and state) then
+                local sprinting = findFirstChild(state, "Sprinting");
+                if (sprinting and not sprinting.Value) then
+                    task.wait(.1);
+                    changestate("Sprint", false);
+                end
+            end
         end
     end
 end);
 
-local vector3new;
-vector3new = hookfunction(getrenv().Vector3.new, function(...)
+local vector3newhook;
+vector3newhook = hookfunction(getrenv().Vector3.new, function(...)
     local caller = debug.getinfo(2, "n");
     if (caller.name == "GetMovementInput") then
         if (select("#", ...) == 0) then
             if (movementSettings.auto_strafe) then
-                changestate("Sprint", false);
-                return vector3new(0, 0, -8);
+                return vector3newhook(0, 0, -1);
             end
         end
     end
-    return vector3new(...);
+    return vector3newhook(...);
 end);
 
 hookfunction(getspeed, function()
@@ -713,13 +765,21 @@ end);
 local initProjectile;
 initProjectile = hookfunction(TS.Projectiles.InitProjectile, function(...)
     local args = {...}
-    if (silentAimSettings.silent_aim or backtrackSettings.backtrack and args[5] == localPlayer) then
+    if (rageSettings.auto_shoot or rageSettings.silent_aim or backtrackSettings.backtrack and args[5] == localPlayer) then
         local hitbox;
+        local target_char = closestViewable
+
+        if (rageSettings.auto_shoot and target_char) then
+            hitbox = target_char.Hitbox
+            args[3] = (hitbox[rageSettings.redirect].CFrame.Position + (Vector3.new(random(1, 10), random(1, 10), random(1, 10)) / 10)) - args[4]
+            return initProjectile(unpack(args));
+        end
+
         if (closestCharacter and closestPlayer) then
             hitbox = closestCharacter.Hitbox
-            local viewable = currentCamera:GetPartsObscuringTarget({currentCamera.CFrame.Position, hitbox[aimbotSettings.lock_on].CFrame.Position}, {aliveCharacters[localPlayer], closestCharacter});
-            if (silentAimSettings.silent_aim and #viewable == 0 or silentAimSettings.wallbang) then
-                args[3] = (hitbox[aimbotSettings.lock_on].CFrame.Position + (Vector3.new(random(1, 10), random(1, 10), random(1, 10)) / 10)) - args[4]
+            local viewable = GetPartsObscuringTarget(currentCamera, {currentCamera.CFrame.Position, hitbox[rageSettings.redirect].CFrame.Position}, {aliveCharacters[localPlayer], closestCharacter});
+            if (rageSettings.silent_aim and #viewable == 0 or rageSettings.wallbang) then
+                args[3] = (hitbox[rageSettings.redirect].CFrame.Position + (Vector3.new(random(1, 10), random(1, 10), random(1, 10)) / 10)) - args[4]
                 return initProjectile(unpack(args));
             end
         end
@@ -845,8 +905,7 @@ players_esp:Toggle("Team Colors", team_colors, function(callback)
         });
     end
 end);
-players_esp:Dropdown("Teams", "All", { "Enemies", "Allies", "All" }, function(callback)
-    table.clear(espSettings.show_teams);
+local fn = function(callback)
     if (callback == "Enemies") then
         table.insert(espSettings.show_teams, teamsPlayers[localPlayer]);
     end
@@ -856,17 +915,22 @@ players_esp:Dropdown("Teams", "All", { "Enemies", "Allies", "All" }, function(ca
         for i, team in pairs(teamsChildren) do
             local teamName = team.Name
             if (teamName ~= teamsPlayers[localPlayer]) then
-                table.insert(teamsNames, team.Name)
+                table.insert(teamsNames, team.Name);
             end
         end
         espSettings.show_teams = teamsNames
     end
-end);
+    espSettings.show_team = callback
+end
+players_esp:Dropdown("Teams", espSettings.show_team, {"Enemies", "Allies", "All"}, function(callback)
+    table.clear(espSettings.show_teams);
+    fn(callback);
+end); fn(espSettings.show_team);
 players_esp:Dropdown("Tracer To", espSettings.tracer_to, {"Head", "Chest"}, function(callback)
     espSettings.tracer_to = callback
 end);
 
-players_esp:Dropdown("Tracer From", "Bottom", { "Top", "Bottom", "Left", "Right" }, function(callback)
+players_esp:Dropdown("Tracer From", "Bottom", {"Top", "Bottom", "Left", "Right"}, function(callback)
     local positions = {
         Top = vector2new(viewportSize.X / 2, viewportSize.Y - viewportSize.Y),
         Bottom = vector2new(viewportSize.X / 2, viewportSize.Y),
@@ -914,7 +978,7 @@ world:Toggle("No Shadows", false, function(callback)
     end
     Services.Lighting.GlobalShadows = not callback
 end);
-world:Slider("Time of Day", 0, 24, Services.Lighting.ClockTime, function(callback)
+world:Slider("Time of Day", 0, 24, floor(Services.Lighting.ClockTime), function(callback)
     Services.Lighting.ClockTime = callback
 end);
 world:Colorpicker("Color Correction", Services.Lighting.ColorCorrection.TintColor, function(callback)
@@ -951,9 +1015,6 @@ end):Keybind(aimbotSettings.aimlock_key, function(callback)
 end);
 aim:Toggle("Enable TriggerBot", aimbotSettings.triggerbot, function(callback)
     aimbotSettings.triggerbot = callback
-end);
-aim:Toggle("Silent Aim", silentAimSettings.silent_aim, function(callback)
-    silentAimSettings.silent_aim = callback
 end);
 aim:Toggle("Show FOV", fovSettings.fov_enabled, function(callback)
     fovSettings.fov_enabled = callback
@@ -993,14 +1054,30 @@ end);
 local rage = mainWindow:Tab("Rage");
 
 local ragemain = rage:Section("Main");
-ragemain:Toggle("Ragebot", false, function()
-
+ragemain:Toggle("Auto Shoot", rageSettings.auto_shoot, function(callback)
+    rageSettings.auto_shoot = callback
+end);
+ragemain:Toggle("Silent Aim", rageSettings.silent_aim, function(callback)
+    rageSettings.silent_aim = callback
+end);
+ragemain:Toggle("Wallbang", rageSettings.wallbang, function(callback)
+    rageSettings.wallbang = callback
+end);
+ragemain:Toggle("Kill aura", rageSettings.kill_aura, function(callback)
+    rageSettings.kill_aura = callback
+end);
+ragemain:Dropdown("Redirect Part", rageSettings.redirect, {"Head", "Chest", "Random"}, function(callback)
+    rageSettings.redirect = callback
 end);
 
 local gunMods = rage:Section("Gun Mods");
 
 gunMods:Toggle("No Recoil", gunmodSettings.no_recoil, function(callback)
     gunmodSettings.no_recoil = callback
+    updateWeaponSettings();
+end);
+gunMods:Toggle("No Weapon Shake", gunmodSettings.no_wep_shake, function(callback)
+    gunmodSettings.no_wep_shake = callback
     updateWeaponSettings();
 end);
 gunMods:Toggle("Instant Scope", gunmodSettings.instant_scope, function(callback)
@@ -1010,15 +1087,8 @@ end);
 gunMods:Toggle("Instant Reload", gunmodSettings.instant_reload, function(callback)
 
 end);
-gunMods:Toggle("Wallbang", gunmodSettings.wallbang, function(callback)
-    gunmodSettings.wallbang = callback
-end);
 
-local ragebot = rage:Section("RageBot");
-
-local other = mainWindow:Tab("Other");
-local movement = other:Section("Movement");
-
+local movement = rage:Section("Movement");
 movement:Toggle("Auto Strafe", movementSettings.auto_strafe, function(callback)
     movementSettings.auto_strafe = callback
 end);
@@ -1035,3 +1105,5 @@ end);
 movement:Slider("Walkspeed", 0, 150, movementSettings.walkspeed, function(callback)
     movementSettings.walkspeed = callback
 end);
+
+local antiAim = rage:Section("Anti aim");
