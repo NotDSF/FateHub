@@ -32,12 +32,9 @@ type Library = { CreateWindow: (self: Library, name: string, game: string, color
 
 local TNow = tick();
 local Lib: Library = loadstring(readfile("UILib.lua"))();
-local Window = Lib:CreateWindow("FH", "Arsenal", Color3.fromRGB(255, 50, 150));
+local Window = Lib:CreateWindow("Fate Hub", "Arsenal", Color3.fromRGB(255, 50, 150));
 Window:SetKeybindClose(Enum.KeyCode.F5);
 
---local Rawget = rawget;
---local Type = typeof;
---local Getgc = getgc;
 local Pairs = pairs;
 local ToastNotif = syn.toast_notification;
 local Game = game;
@@ -51,15 +48,11 @@ local IsMouseButtonPressed = UserInputService.IsMouseButtonPressed;
 local GetChildren = Game.GetChildren;
 local FindFirstChild = Game.FindFirstChild;
 local IsDescendantOf = Game.IsDescendantOf;
---local GetDescendants = Game.GetDescendants;
 local IsA = Game.IsA;
 local Raycast = Workspace.Raycast;
---local match = string.match;
---local HitRemote = game.ReplicatedStorage.Events["\226\128\139HitPart"];
 local RaycastParams = RaycastParams.new();
 local CFrame = CFrame.new;
 local sort = table.sort;
---local info = debug.info;
 local Delay = task.delay;
 local Tick = tick;
 local fromHSV = Color3.fromHSV;
@@ -72,7 +65,6 @@ local TextDynamic = TextDynamic.new;
 local format = string.format;
 local floor = math.floor;
 local MouseButton2 = Enum.UserInputType.MouseButton2;
---local Type = typeof;
 local Mouse = LocalPlayer:GetMouse();
 local Checkcaller = checkcaller;
 local Hookmetamethod = hookmetamethod;
@@ -81,6 +73,8 @@ local getnamecallmethod = getnamecallmethod;
 local LineDynamic = LineDynamic.new;
 local Point2D = Point2D.new;
 local filtergc = filtergc;
+local Ray = Ray.new;
+local unpack = unpack;
 
 local Flags, ESPObjects, ESPLines = {}, {}, {};
 local BackupIndex, BackupNewIndex, BackupNamecall;
@@ -304,8 +298,6 @@ local function AddLine(player)
 end;
 
 -- Legit
-local CircleColorPicker;
-
 do 
     local LegitTab = Window:Tab("Legit");
 
@@ -331,11 +323,11 @@ do
     local SilentAim = LegitTab:Section("Silent Aim");
     SilentAim:Toggle("Enabled", false, function(value) Flags.SilentAim = value; end);
     SilentAim:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.SilentAimTarget = selected; end);
-    SilentAim:Toggle("Show FOV Circle", true, function(value) FOV.Visible = value; end);
+
+    local FOVCircle = SilentAim:Toggle("Show FOV Circle", true, function(value) FOV.Visible = value; end);
     SilentAim:Slider("FOV", 1, 2000, 200, function(value) FOV.Radius = value; end);
     SilentAim:Slider("Circle Thickness", 1, 100, 1, function(value) FOV.Thickness = value; end);
-    CircleColorPicker = SilentAim:Colorpicker("Circle Color", Color3(1, 1,1), function(value) FOV.Color = value; end);
-    SilentAim:Toggle("Rainbow", false, function(value) Flags.FOVCircleRainbow = value; end);
+    FOVCircle:Colorpicker(Color3(0.313725, 0.988235, 0), function(value) FOV.Color = value; end);
 
     local Weapon = LegitTab:Section("Weapon");
     Weapon:Toggle("Infinite Ammo", false, function(value) Flags.InfiniteAmmo = value; end);
@@ -376,7 +368,6 @@ do
 end;
 
 -- Visual
-local BoxTeamColor, BoxEnemyColor;
 do 
     local Visual = Window:Tab("Visual");
     local Main = Visual:Section("Main");
@@ -421,16 +412,14 @@ do
         Flags.Tracers = value;
     end);
 
-    ESP:Toggle("Show Team", true, function(value) Flags.ShowTeam = value; end);
-    ESP:Toggle("Show Enemy", true, function(value) Flags.ShowEnemy = value; end);
+    local TeamToggle = ESP:Toggle("Show Team", true, function(value) Flags.ShowTeam = value; end);
+    local EnemyToggle = ESP:Toggle("Show Enemy", true, function(value) Flags.ShowEnemy = value; end);
 
     ESP:Slider("Max Distance", 1, 2000, 1000, function(value) Flags.ESPMaxDistance = value; end);
     ESP:Slider("Box Thickness", 1, 100, 1, function(value) Flags.ESPBoxThickness = value; end);
-    ESP:Toggle("Rainbow Team", false, function(value) Flags.RainbowTeam = value; end);
-    ESP:Toggle("Rainbow Enemy", false, function(value) Flags.RainbowEnemmy = value; end);
 
-    BoxTeamColor = ESP:Colorpicker("Team Color", Color3(0.274509, 0.972549, 0.392156), function(value) Flags.ESPTeamColor = value; end);
-    BoxEnemyColor = ESP:Colorpicker("Enemy Color", Color3(0.972549, 0.274509, 0.286274), function(value) Flags.ESPEnemyColor = value; end);
+    TeamToggle:Colorpicker(Color3(0.274509, 0.972549, 0.392156), function(value) Flags.ESPTeamColor = value; end);
+    EnemyToggle:Colorpicker(Color3(0.972549, 0.274509, 0.286274), function(value) Flags.ESPEnemyColor = value; end);
 
     Flags.ESPTeamColor = Color3(0.286274, 0.968627, 0.4);
     Flags.ESPEnemyColor = Color3(0.972549, 0.439215, 0.447058);
@@ -495,7 +484,7 @@ BackupNamecall = hookmetamethod(game, "__namecall", function(self, ...)
         local Result = Raycast(Workspace, Head, Target.Position - Head);
         if Result and not IsDescendantOf(Result.Instance, Closest.Character) or not Result then return BackupNamecall(self, ...) end;
         
-        args[1] = Ray.new(args[1].Origin, Target.Position - args[1].Origin);
+        args[1] = Ray(args[1].Origin, Target.Position - args[1].Origin);
         return BackupNamecall(self, unpack(args));
     end;
 
@@ -534,8 +523,6 @@ LocalPlayer.Character.UpperTorso.Touched:Connect(function(part)
 end);
 
 Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
-    local RGB = fromHSV((Tick() / 5) % 1, 1, 1);
-
     if Flags.ESP then
         for i,v in Pairs(ESPObjects) do
             local Player = v.Player;
@@ -551,20 +538,10 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
                 -- I hate this CODE
                 if Player.TeamColor == LocalPlayer.TeamColor then
                     Color = Flags.ESPTeamColor;
-                    if Flags.RainbowTeam then
-                        Color = RGB;
-                        BoxTeamColor:UpdateColor(Color);
-                    end;
-    
                     v.Text.Visible = Flags.ShowTeam;
                     v.Rect.Visible = Flags.ShowTeam;
                 else
                     Color = Flags.ESPEnemyColor;
-                    if Flags.RainbowEnemmy then
-                        Color = RGB;
-                        BoxEnemyColor:UpdateColor(Color);
-                    end;
-    
                     v.Text.Visible = Flags.ShowEnemy;
                     v.Rect.Visible = Flags.ShowEnemy;
                 end;
@@ -580,35 +557,22 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
         for i,v in Pairs(ESPLines) do
             local Player = v.Player;
             local Character = v.Character;
-            local Distance = floor((LocalPlayer.Character.Head.Position - Character.Head.Position).magnitude);
+            local Distance = floor((LocalPlayer.Character.Head.Position - Character.Head.Position).magnitude) < Flags.ESPMaxDistance;
 
-            v.Line.Visible = Distance < Flags.ESPMaxDistance;
+            v.Line.Visible = Distance;
 
-            if Distance < Flags.ESPMaxDistance then
+            if Distance then
                 if Player.TeamColor == LocalPlayer.TeamColor then
                     Color = Flags.ESPTeamColor;
-                    if Flags.RainbowTeam then
-                        Color = RGB;
-                        BoxTeamColor:UpdateColor(Color);
-                    end;
                     v.Line.Visible = Flags.ShowTeam;
                 else
                     Color = Flags.ESPEnemyColor;
-                    if Flags.RainbowEnemmy then
-                        Color = RGB;
-                        BoxEnemyColor:UpdateColor(Color);
-                    end;
                     v.Line.Visible = Flags.ShowEnemy;
                 end;
     
                 v.Line.Color = Color;
             end;
         end;
-    end;
-
-    if Flags.FOVCircleRainbow then
-        FOV.Color = RGB;
-        CircleColorPicker:UpdateColor(RGB);
     end;
 
     if equipped.Value == "none" then return end;
@@ -683,7 +647,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
     if Flags.WepRainbow and FindFirstChild(Camera, "Arms") then
         for i,v in Pairs(GetChildren(Camera.Arms)) do
             if IsA(v, "MeshPart") then
-                v.Color = RGB;
+                v.Color = fromHSV((Tick() / 5) % 1, 1, 1);
             end;
         end;
     end;
