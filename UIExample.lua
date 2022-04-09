@@ -11,6 +11,8 @@ local Toggle = Section1:Toggle('test', false, function(a)
     print(a)
 end)
 local Toggle2 = Section1:Toggle('fh winning?', true, function() end)
+local Toggle3 = Section1:Toggle('yes', true, function() end)
+
 local Dropdown = Section1:Dropdown('test', 'default', {'ab', 'ac'}, function(a) 
       print(a) 
 end)
@@ -41,6 +43,9 @@ Toggle:UpdateTitle('UpdatedTitle')
 Toggle2:Colorpicker(Color3.new(0, 1, 0), function(color)
     print("wow", color);
 end);
+Toggle3:Keybind(Enum.UserInputType.MouseButton2, function(callback)
+    print("wow x2", callback);
+end)
 Dropdown:UpdateList({'new', 'list'})
 Dropdown:UpdateTitle('New title')
 Slider:UpdateMin(0)
