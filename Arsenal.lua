@@ -480,24 +480,26 @@ do
     ]]
 end;
 
-BackupNamecall = hookmetamethod(game, "__namecall", function(...) 
+BackupNamecall = hookmetamethod(game, "__namecall", function(self, ...) 
     local method = getnamecallmethod();
 
-    if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" and Flags.SilentAim and Gun.Value then
+    if method == "FindPartOnRayWithIgnoreList" and Flags.SilentAim and Gun.Value then
+        local args = {...};
         local MouseVector = Vector2(Mouse.X, Mouse.Y);
         local Closest = GetClosestPlayerFromVector2(MouseVector);
         local Head = LocalPlayer.Character.Head.Position;
 
-        if not Closest or (Head - Closest.Character[Flags.SilentAimTarget].Position).magnitude > Gun.Value.Range.Value then return BackupNamecall(...) end;
+        if not Closest then return BackupNamecall(self, ...) end;
 
         local Target = Closest.Character[Flags.SilentAimTarget];
         local Result = Raycast(Workspace, Head, Target.Position - Head);
-        if Result and not IsDescendantOf(Result.Instance, Closest.Character) or not Result then return BackupNamecall(...) end;
+        if Result and not IsDescendantOf(Result.Instance, Closest.Character) or not Result then return BackupNamecall(self, ...) end;
         
-        return Target, Camera.CFrame.LookVector, Target.Position;
+        args[1] = Ray.new(args[1].Origin, Target.Position - args[1].Origin);
+        return BackupNamecall(self, unpack(args));
     end;
 
-    return BackupNamecall(...);
+    return BackupNamecall(self, ...);
 end);
 
 Mouse.Move.Connect(Mouse.Move, function() FOV.Position = Vector2(Mouse.X, Mouse.Y); end);
