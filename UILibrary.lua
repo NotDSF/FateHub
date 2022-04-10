@@ -21,8 +21,7 @@ local KeybindClose = Enum.KeyCode.BackSlash
 local UiLib = {}
 local Tabs = {}
 
-local function UiElements(Section, SectionTable)
-    local Ret = {}
+local function UiElements(Section, SectionTable, Ret)
     local SectionalY = 15
 
 	local function newColorPicker(withToggle, parent, name, Def, Callback)
@@ -1012,6 +1011,7 @@ local function Section(Tab, TabTable)
         BorderHide.Parent = Section
 
         local SectionTable = {}
+        local SectionControl = {}
         TabTable[Name] = SectionTable
 
         local Sectional = RLToggle and 'R' or 'L'
@@ -1021,10 +1021,26 @@ local function Section(Tab, TabTable)
             UpdateTabScroll()
         end)
 
+        function SectionControl:SetLeft()
+            local CurrentSec = Sectional == 'R' and R or L
+            table.remove(CurrentSec, table.find(CurrentSec, Section))
+            table.insert(L, Section)
+            Sectional = 'L'
+            UpdatePositions('R'); UpdatePositions('L')
+        end
+
+        function SectionControl:SetRight()
+            local CurrentSec = Sectional == 'R' and R or L
+            table.remove(CurrentSec, table.find(CurrentSec, Section))
+            table.insert(R, Section)
+            Sectional = 'R'
+            UpdatePositions('R'); UpdatePositions('L')
+        end
+
         table.insert(RLToggle and R or L, Section); UpdatePositions(Sectional)
         RLToggle = not RLToggle
 
-        return UiElements(Section, SectionTable)
+        return UiElements(Section, SectionTable, SectionControl)
     end
     
     return Ret
