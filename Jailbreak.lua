@@ -1,5 +1,32 @@
 -- The types are just to help me with remembering the names
 
+type Toggle = { UpdateToggle: (self: Toggle, toset: boolean) -> nil, UpdateTitle: (self: Toggle, name: string) -> nil }
+type Dropdown = { UpdateList: (self: Dropdown, list: {}) -> nil, UpdateTitle: (self: Dropdown, name: string) -> nil }
+type Colorpicker = { UpdateColor: (self: Colorpicker, NewColor: Color3) -> nil, UpdateTitle: (self: Colorpicker, name: string) -> nil }
+type Keybind = { UpdateBind: (self: Keybind, NewKeybind: Enum.KeyCode) -> nil, UpdateTitle: (self: Keybind, name: string) -> nil }
+type UserInput = { UpdateInput: (self: UserInput, NewInput: string) -> nil, UpdateTitle: (self: UserInput, name: string) -> nil }
+type Button = { UpdateTitle: (self: Button, name: string) -> nil }
+type Slider = {
+    UpdateValue: (self: Slider, value: number) -> nil,
+    UpdateMin: (self: Slider, min: number) -> nil,
+    UpdateMax: (self: Slider, max: number) -> nil,
+    UpdateTitle: (self: Slider, name: string) -> nil
+}
+
+type Main = {
+    Toggle: (self: Main, name: string, default: boolean?, callback: (value: boolean) -> nil) -> Toggle,
+    Dropdown: (self: Main, name: string, start: string, list: {}, callback: (selected: string) -> nil) -> Dropdown,
+    Slider: (self: Main, name: string, min: number, max: number, default: number, callback: (value: number) -> nil, nofill: boolean?, floor: boolean?) -> Slider,
+    Colorpicker: (self: Main, name: string, StartingColor: Color3, callback: (color: Color3) -> nil) -> Colorpicker,
+    Keybind: (self: Main, name: string, StartingKey: Enum.KeyCode?, onset: (keycode: Enum.KeyCode) -> nil, oninput: () -> nil) -> Keybind,
+    Button: (self: Main, name: string, callback: () -> nil) -> Button,
+    UserInput: (self: Main, default: string, callback: () -> nil) -> UserInput
+}
+
+type Section = { Section: (self: Section, name: string) -> Main }
+type Window = { Tab: (self: Window, name: string) -> Section, VisiblityKey: Enum.KeyCode }
+type Library = { CreateWindow: (self: Library, name: string, game: string, colorscheme: Color3?) -> Window }
+
 type ChassisType = {
     setBackward: (p1: any) -> (...any),
     VehicleEnter: (p1: any) -> (...any),
@@ -63,14 +90,9 @@ getgenv().FatesHub = true;
 ToastType = ToastType or {};
 
 local TNow = tick();
-local Lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kinlei/MaterialLua/master/Module.lua"))();
-local UI = Lib.Load({
-    Title = "Fates Hub",
-    Style = 1,
-    SizeX = 500,
-    SizeY = 600,
-    Theme = "Dark"
-});
+local Lib: Library = loadstring(readfile("UILib.lua"))();
+local Window = Lib:CreateWindow("Fate Hub", "Jailbreak", Color3.fromRGB(255, 50, 150));
+Window:SetKeybindClose(Enum.KeyCode.F5);
 
 local Rawget = rawget;
 local Type = typeof;
@@ -78,21 +100,14 @@ local Getgc = getgc;
 local Pairs = pairs;
 local info = debug.info;
 local ToastNotif = syn.toast_notification;
+local filtergc = filtergc;
 
 local function GetLocal(index) 
-    for i,v in Pairs(Getgc(true)) do
-        if Type(v) == "table" and Rawget(v, index) then
-            return v;
-        end;
-    end;
+    return filtergc("table", { Keys = { index } }, true);
 end;
 
 local function GetFunction(name) 
-    for i,v in Pairs(Getgc()) do
-        if Type(v) == "function" and info(v, "n") == name then
-            return v;
-        end;
-    end;
+    return filtergc("function", { Name = name }, true);
 end;
 
 local function SynapseNotification(Content, Type) 
@@ -176,13 +191,9 @@ do
     GetKey("AttemptArrest", {});
 end;
 
-for i,v in Pairs(Keys) do
-    rconsoleinfo(string.format("Automatically grabbed %s key: %s\n", i, v));
-end;
 
 for i,v in Pairs(Getgc(true)) do
     if Type(v) == "function" and info(v, "n") == "CheatCheck" then
-        rconsoleinfo("Disabled anti cheat!\n");
         hookfunction(v, function() end);
     end;
 end;
@@ -214,154 +225,100 @@ end;
 
 -- Vehicle
 do
-    local VehiclePage = UI.New({
-        Title = "Vehicle"
-    });
+    local VehiclePage = Window:Tab("Main");
+    local Main = VehiclePage:Section("Vehicle");
 
-    VehiclePage.Toggle({
-        Text = "Infinite Nitro",
-        Callback = function(bool)
-            local NitroTable = GetLocal("NitroLastMax");
-            if bool then
-                NitroTable.NitroB = NitroTable.Nitro;
-                NitroTable.NitroMaxB = NitroTable.NitroLastMax; 
-                NitroTable.Nitro = math.huge;
-                NitroTable.NitroLastMax = math.huge;
-            elseif NitroTable.NitroB then
-                NitroTable.Nitro = NitroTable.NitroB;
-                NitroTable.NitroLastMax = NitroTable.NitroMaxB; 
-            end;
-            Flags.InfiniteNitro = bool;
-        end,
-        Enabled = false
-    });
-
-    VehiclePage.Toggle({
-        Text = "No Tire Pop",
-        Callback = function(bool) 
-            local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet and bool then
-                Packet.TirePopDuration = 0;
-            elseif Packet then
-                if not Packet.TirePopDurationBackup then
-                    Packet.TirePopDurationBackup = Packet.TirePopDuration;
-                end
-                Packet.TirePopDuration = Packet.TirePopDurationBackup;
-            end;
+    Main:Toggle("Infinite Nitro", false, function(bool) 
+        local NitroTable = GetLocal("NitroLastMax");
+        if bool then
+            NitroTable.NitroB = NitroTable.Nitro;
+            NitroTable.NitroMaxB = NitroTable.NitroLastMax; 
+            NitroTable.Nitro = math.huge;
+            NitroTable.NitroLastMax = math.huge;
+        elseif NitroTable.NitroB then
+            NitroTable.Nitro = NitroTable.NitroB;
+            NitroTable.NitroLastMax = NitroTable.NitroMaxB; 
         end;
-    });
+        Flags.InfiniteNitro = bool;
+    end);
 
-    VehiclePage.Toggle({
-        Text = "Vehicle Fly",
-        Callback = function(bool)
-            local Packet = Vehicle.GetLocalVehiclePacket();
-            if Flags.VehicleFly and Packet and Packet.Mass then
-                Chassis.SetGravity(Packet, 60);
-            end;
-            if Packet and not Packet.Mass and bool then
-                SynapseNotification("Your current vehicle is not supported.\nIf you enter a supported vehicle then vehicle fly will automatically be applied.", ToastType.Error);
-            end;
-            Flags.VehicleFly = bool;
+    Main:Toggle("No Tire Pop", false, function(bool) 
+        local Packet = Vehicle.GetLocalVehiclePacket();
+        if Packet and bool then
+            Packet.TirePopDuration = 0;
+        elseif Packet then
+            if not Packet.TirePopDurationBackup then
+                Packet.TirePopDurationBackup = Packet.TirePopDuration;
+            end
+            Packet.TirePopDuration = Packet.TirePopDurationBackup;
         end;
-    });
+    end);
 
-    VehiclePage.Slider({
-        Text = "Gravity",
-        Min = 1,
-        Max = 100,
-        Def = 20,
-        Callback = function(value) 
-            local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet and Packet.Mass then
-                Chassis.SetGravity(Packet, value);
-            end;
-            --VehicleConfig.Lift.Force = Vector3.new(0, VehicleConfig.Lift.Force.Y * value, 0);
+    Main:Toggle("Vehicle Fly", false, function(bool)
+        local Packet = Vehicle.GetLocalVehiclePacket();
+        if Flags.VehicleFly and Packet and Packet.Mass then
+            Chassis.SetGravity(Packet, 60);
         end;
-    });
+        if Packet and not Packet.Mass and bool then
+            SynapseNotification("Your current vehicle is not supported.\nIf you enter a supported vehicle then vehicle fly will automatically be applied.", ToastType.Error);
+        end;
+        Flags.VehicleFly = bool;
+    end);
 
-    VehiclePage.Slider({
-        Text = "Turn Speed",
-        Min = 1,
-        Max = 100,
-        Def = 1,
-        Callback = function(value) 
-            local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet then
-                Packet.TurnSpeed = value;
-            end;
-            VehicleConfig.TurnSpeed = value;
+    Main:Slider("Gravity", 1, 100, 20, function(value) 
+        local Packet = Vehicle.GetLocalVehiclePacket();
+        if Packet and Packet.Mass then
+            Chassis.SetGravity(Packet, value);
         end;
-    });
+    end);
 
-    VehiclePage.Slider({
-        Text = "Suspension",
-        Min = 1,
-        Max = 100,
-        Def = 4,
-        Callback = function(value) 
-            local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet then
-                Packet.Suspension = value;
-            end;
-            VehicleConfig.Suspension = value;
+    Main:Slider("Turn Speed", 1, 100, 1, function(value) 
+        local Packet = Vehicle.GetLocalVehiclePacket();
+        if Packet then
+            Packet.TurnSpeed = value;
         end;
-    });
+        VehicleConfig.TurnSpeed = value;
+    end);
 
-    VehiclePage.Slider({
-        Text = "Traction",
-        Min = 1,
-        Max = 100,
-        Def = 1,
-        Callback = function(value) 
-            local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet then
-                Packet.Traction = value;
-            end;
-            VehicleConfig.Traction = value;
+    Main:Slider("Suspension", 1, 100, 4, function(value) 
+        local Packet = Vehicle.GetLocalVehiclePacket();
+        if Packet then
+            Packet.Suspension = value;
         end;
-    });
+        VehicleConfig.Suspension = value;
+    end);
 
-    VehiclePage.Slider({
-        Text = "Height",
-        Min = 1,
-        Max = 100,
-        Def = 3,
-        Callback = function(value) 
-            local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet then
-                Packet.Height = value;
-            end;
-            VehicleConfig.Height = value;
+    Main:Slider("Traction", 1, 100, 1, function(value) 
+        local Packet = Vehicle.GetLocalVehiclePacket();
+        if Packet then
+            Packet.Traction = value;
         end;
-    });
+        VehicleConfig.Traction = value;
+    end);
 
-    VehiclePage.Slider({
-        Text = "Engine Speed",
-        Min = 1,
-        Max = 100,
-        Def = 1,
-        Callback = function(value) 
-            local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet then
-                Packet.GarageEngineSpeed = value;
-            end;
-            VehicleConfig.GarageEngineSpeed = value;
+    Main:Slider("Height", 1, 100, 3, function(value) 
+        local Packet = Vehicle.GetLocalVehiclePacket();
+        if Packet then
+            Packet.Height = value;
         end;
-    });
+        VehicleConfig.Height = value;
+    end);
 
-    VehiclePage.Slider({
-        Text = "Brakes",
-        Min = 1,
-        Max = 100,
-        Def = 1,
-        Callback = function(value) 
-            local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet then
-                Packet.GarageBrakes = value or 1;
-            end;
-            VehicleConfig.GarageBrakes = value or 1;
+    Main:Slider("Engine Speed", 1, 100, 1, function(value) 
+        local Packet = Vehicle.GetLocalVehiclePacket();
+        if Packet then
+            Packet.GarageEngineSpeed = value;
         end;
-    });
+        VehicleConfig.GarageEngineSpeed = value;
+    end);
+
+    Main:Slider("Brakes", 1, 100, 1, function(value) 
+        local Packet = Vehicle.GetLocalVehiclePacket();
+        if Packet then
+            Packet.GarageBrakes = value or 1;
+        end;
+        VehicleConfig.GarageBrakes = value or 1;
+    end);
 
     local Vehicles = {};
     for i,v in Pairs(require(ReplicatedStorage.Game.Garage.VehicleData)) do
@@ -369,210 +326,131 @@ do
     end;
     sort(Vehicles);
 
-    VehiclePage.Dropdown({
-        Text = "Emulate Vehicle",
-        Callback = function(value) 
-            local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet then
-                Packet.Make = value;
-                Packet.EnumMakeId = MakeId[value];
-            end;
-            Flags.EmulateVehicle = value;
-        end,
-        Options = Vehicles
-    });
-
-    Flags.VehicleColor = VehiclePage.ColorPicker({
-        Text = "Vehicle Color",
-        Default = Color3.fromRGB(255, 0, 0),
-        Callback = function(value) 
-            local Packet = Vehicle.GetLocalVehiclePacket();
-            if Packet then
-                Packet.Model.Model.Body.Color = value;
-            end;
+    Main:Dropdown("Emulate Vehicle(s)", "none", Vehicles, function(value) 
+        local Packet = Vehicle.GetLocalVehiclePacket();
+        if Packet then
+            Packet.Make = value;
+            Packet.EnumMakeId = MakeId[value];
         end;
-    });
+        Flags.EmulateVehicle = value;
+    end);
+
+    Flags.VehicleColor = Main:Colorpicker("Vehicle Color", Color3.fromRGB(255, 0, 0), function(color)
+        local Packet = Vehicle.GetLocalVehiclePacket();
+        if Packet then
+            Packet.Model.Model.Body.Color = color;
+        end;
+    end);
 
     local Packet = Vehicle.GetLocalVehiclePacket();
     if Packet then
-        Flags.VehicleColor:SetColor(Packet.Model.Model.Body.Color);
+        Flags.VehicleColor:UpdateColor(Packet.Model.Model.Body.Color);
     end;
-end;
 
--- Combat
-do 
-    local GunPage = UI.New({
-        Title = "Combat"
-    });
+    Main = VehiclePage:Section("Combat");
 
-    GunPage.Toggle({
-        Text = "Infinite Ammo",
-        Callback = function(bool) 
-            if __equiped then
-                local value = bool and math.huge or __equiped.Config.MagSize;
-                InventoryUtils.setAttr(__equiped.inventoryItemValue, "AmmoCurrentLocal", value);
-                InventoryUtils.setAttr(__equiped.inventoryItemValue, "AmmoCurrent", value);
-                InventoryUtils.setAttr(__equiped.inventoryItemValue, "AmmoLeft", value);
-            end;
-            Flags.InfiniteAmmo = bool;
-        end,
-        Enabled = false
-    });
+    Main:Toggle("Infinite Ammo", false, function(bool) 
+        if __equiped then
+            local value = bool and math.huge or __equiped.Config.MagSize;
+            InventoryUtils.setAttr(__equiped.inventoryItemValue, "AmmoCurrentLocal", value);
+            InventoryUtils.setAttr(__equiped.inventoryItemValue, "AmmoCurrent", value);
+            InventoryUtils.setAttr(__equiped.inventoryItemValue, "AmmoLeft", value);
+        end;
+        Flags.InfiniteAmmo = bool;
+    end);
 
-    GunPage.Toggle({
-        Text = "Rapid Fire",
-        Callback = function(bool) 
-            if __equiped and __equiped.Config then
-                __equiped.Config.FireFreq = bool and math.huge or 12;
-            end;
-            GunConfig.FireFreq = bool and math.huge or 12;
-        end,
-        Enabled = false
-    });
+    Main:Toggle("Rapid Fire", false, function(bool) 
+        if __equiped and __equiped.Config then
+            __equiped.Config.FireFreq = bool and math.huge or 12;
+        end;
+        GunConfig.FireFreq = bool and math.huge or 12;
+    end);
 
-    GunPage.Toggle({
-        Text = "No Reload",
-        Callback = function(bool) 
-            if __equiped and __equiped.Config then
-                __equiped.Config.ReloadTime = bool and 0 or 1.5;
-            end;
-            GunConfig.ReloadTime = bool and 0 or 1.5;
-        end,
-        Enabled = false
-    });
+    Main:Toggle("No Reload", false, function(bool) 
+        if __equiped and __equiped.Config then
+            __equiped.Config.ReloadTime = bool and 0 or 1.5;
+        end;
+        GunConfig.ReloadTime = bool and 0 or 1.5;
+    end);
+
+    Main:Toggle("Automatic", false, function(bool) 
+        if __equiped and __equiped.Config then
+            __equiped.Config.FireAuto = bool;
+        end;
+        GunConfig.FireAuto = bool;
+    end);
+
+    Main = VehiclePage:Section("Misc");
+    Main:SetRight();
     
-    GunPage.Toggle({
-        Text = "Automatic",
-        Callback = function(bool) 
-            if __equiped and __equiped.Config then
-                __equiped.Config.FireAuto = bool;
-            end;
-            GunConfig.FireAuto = bool;
-        end,
-        Enabled = false
-    });
-end;
-
--- Misc
-do 
-    local Misc = UI.New({
-        Title = "Misc"
-    });
-
-    Misc.Button({
-        Text = "Open All Doors",
-        Callback = function() 
-            local OpenF = GetFunction("DoorSequence");
-            for i,v in Pairs(Getgc(true)) do 
-                if Type(v) == "table" and Rawget(v, "Settings") and Rawget(v, "State") then
-                    if v.Settings.ServerOnly or v.State.Open then continue; end;
-                    OpenF(v);
-                end;
+    Main:Button("Open All Doors", function() 
+        local OpenF = GetFunction("DoorSequence");
+        for i,v in Pairs(Getgc(true)) do 
+            if Type(v) == "table" and Rawget(v, "Settings") and Rawget(v, "State") then
+                if v.Settings.ServerOnly or v.State.Open then continue; end;
+                OpenF(v);
             end;
         end;
-    });
+    end);
 
-    Misc.Button({
-        Text = "Remove Lasers",
-        Callback = function() 
-            for i,v in Pairs(Game.Workspace:GetDescendants()) do
-                if v.Name == "Lasers" then
-                    v:Destroy();
-                end;
+    Main:Button("Remove Lasers", function() 
+        for i,v in Pairs(Game.Workspace:GetDescendants()) do
+            if v.Name == "Lasers" then
+                v:Destroy();
             end;
         end;
-    });
+    end);
 
-    Misc.Toggle({
-        Text = "Auto Pickpocket",
-        Callback = function(bool) 
-            Flags.Pickpocket = bool
-        end,
-        Enabled = false
-    });
+    Main:Toggle("Auto Pickpocket", false, function(bool) 
+        Flags.Pickpocket = bool
+    end);    
 
-    Misc.Toggle({
-        Text = "Auto Arrest",
-        Callback = function(bool) 
-            Flags.Arrest = bool;
-        end,
-        Enabled = false;
-    });
+    Main:Toggle("Auto Arrest", false, function(bool) 
+        Flags.Arrest = bool;
+    end);
 
-    Misc.Toggle({
-        Text = "Auto Eject",
-        Callback = function(bool) 
-            Flags.EjectLoop = bool;
-        end,
-        Enabled = false
-    });
+    Main:Toggle("Auto Eject", false, function(bool) 
+        Flags.EjectLoop = bool;
+    end);
 
-    Misc.Toggle({
-        Text = "Auto Parachute",
-        Callback = function(bool) 
-            Flags.AutoParachute = bool;
-        end,
-        Enabled = false
-    });
+    Main:Toggle("Auto Parachute", false, function(bool) 
+        Flags.AutoParachute = bool;
+    end);
 
-    Misc.Toggle({
-        Text = "No Cooldown",
-        Callback = function(bool) 
-            for i,v in Pairs(Getgc(true)) do
-                if Type(v) == "table" and Rawget(v, "Duration") then
-                    if not v.Backup then
-                        v.Backup = v.Duration;
-                    end;
-                    rawset(v, "Duration", bool and 0 or v.Backup);
+    Main:Toggle("No Cooldown", false, function(bool) 
+        for i,v in Pairs(Getgc(true)) do
+            if Type(v) == "table" and Rawget(v, "Duration") then
+                if not v.Backup then
+                    v.Backup = v.Duration;
                 end;
+                rawset(v, "Duration", bool and 0 or v.Backup);
             end;
-        end,
-        Enabled = false
-    });
+        end;
+    end);
 
-    Misc.Button({
-        Text = "Rejoin",
-        Callback = function() 
-            Game.TeleportService:TeleportToPlaceInstance(Game.PlaceId, Game.JobId);
-        end
-    });
+    Main:Button("Rejoin", function() 
+        Game.TeleportService:TeleportToPlaceInstance(Game.PlaceId, Game.JobId);
+    end);
 end;
 
 -- Player
-do
-    local Player = UI.New({
-        Title = "Player"
-    });
+local GetClosestPlayer; do
+    local Player = Window:Tab("Player");
+    local Main = Player:Section("Main");
 
-    Player.Toggle({
-        Text = "No Ragdoll",
-        Callback = function(bool) 
-            Flags.NoRagdoll = bool;
-        end,
-        Enabled = false;
-    });
+    Main:Toggle("No Ragdoll", false, function(bool) 
+        Flags.NoRagdoll = bool;
+    end);
 
-    Player.Slider({
-        Text = "WalkSpeed",
-        Min = 1,
-        Def = 16,
-        Max = 200,
-        Callback = function(value) 
-            LocalPlayer.Character.Humanoid.WalkSpeed = value;
-            Flags.WalkSpeed = value;
-        end
-    });
+    Main:Slider("WalkSpeed", 1, 200, 16, function(value) 
+        LocalPlayer.Character.Humanoid.WalkSpeed = value;
+        Flags.WalkSpeed = value;
+    end);
 
-    Player.Slider({
-        Text = "JumpPower",
-        Min = 1,
-        Def = 50,
-        Max = 200,
-        Callback = function(value) 
-            LocalPlayer.Character.Humanoid.JumpPower = value;
-            Flags.JumpPower = value;
-        end;
-    });
+    Main:Slider("JumpPower", 1, 200, 50, function(value) 
+        LocalPlayer.Character.Humanoid.JumpPower = value;
+        Flags.JumpPower = value;
+    end);
 
     local Falling = GetLocal("StartRagdolling");
     local Backup;
@@ -580,13 +458,8 @@ do
         if Flags.NoRagdoll then return end;
         return Backup(...);
     end);
-end;
 
--- Teleport 
-do 
-    local TeleportUI = UI.New({
-        Title = "Teleports"
-    });
+    Main = Player:Section("Teleports");
 
     local function Teleport(Pos)
         local HumanoidRootPart = LocalPlayer.Character.HumanoidRootPart;
@@ -610,41 +483,26 @@ do
         HumanoidRootPart.CFrame = CFrame(HumanoidRootPart.Position.X, Pos.Y + 10, HumanoidRootPart.Position.Z);
     end;
 
-    TeleportUI.Button({ Text = "Bank", Callback = function() Teleport(Vector3(11.033385276794, 18.327821731567, 778.54730224609)); end; });
-    TeleportUI.Button({ Text = "Museum", Callback = function() Teleport(Vector3(1059.7930908203, 101.80494689941, 1249.2574462891)); end; });
-    TeleportUI.Button({ Text = "Jewellery Store", Callback = function() Teleport(Vector3(115.15441131592, 18.263557434082, 1363.3806152344)); end; });
-    TeleportUI.Button({ Text = "Criminal Base (Volcano)", Callback = function() Teleport(Vector3(1815.5421142578, 47.260692596436, -1634.0577392578)); end; });
-    TeleportUI.Button({ Text = "Criminal Base (Downtown)", Callback = function() Teleport(Vector3(-241.9779510498, 18.263689041138, 1614.1091308594)); end; });
-    TeleportUI.Button({ Text = "Police Station (Inner City)", Callback = function() Teleport(Vector3(177.87417602539, 18.581577301025, 1091.3991699219)); end; });
-    TeleportUI.Button({ Text = "Police Station (City Outskirts)", Callback = function() Teleport(Vector3(720.49090576172, 38.615474700928, 1066.9827880859)); end; });
-    TeleportUI.Button({ Text = "Prision Entrance", Callback = function() Teleport(Vector3(-1153.9276123047, 18.398023605347, -1431.1813964844)); end; });
-    TeleportUI.Button({ Text = "Gas Station", Callback = function() Teleport(Vector3(-1558.5793457031, 18.396139144897, 665.70147705078)); end; });
-    TeleportUI.Button({ Text = "Donut Shop", Callback = function() Teleport(Vector3(161.52265930176, 19.215852737427, -1597.4591064453)); end; });
-end;
+    Main:Button("Bank", function() Teleport(Vector3(11.033385276794, 18.327821731567, 778.54730224609)); end);
+    Main:Button("Museum", function() Teleport(Vector3(1059.7930908203, 101.80494689941, 1249.2574462891)); end);
+    Main:Button("Jewellery Store", function() Teleport(Vector3(1059.7930908203, 101.80494689941, 1249.2574462891)); end);
+    Main:Button("Criminal Base (Volcano)", function() Teleport(Vector3(1815.5421142578, 47.260692596436, -1634.0577392578)); end);
+    Main:Button("Criminal Base (Downtown)", function() Teleport(Vector3(-241.9779510498, 18.263689041138, 1614.1091308594)); end);
+    Main:Button("Police Station (Inner City)", function() Teleport(Vector3(177.87417602539, 18.581577301025, 1091.3991699219)); end);
+    Main:Button("Police Station (City Outskirts)", function() Teleport(Vector3(720.49090576172, 38.615474700928, 1066.9827880859)); end);
+    Main:Button("Prison Entrance", function() Teleport(Vector3(-1153.9276123047, 18.398023605347, -1431.1813964844)); end);
+    Main:Button("Gas Station", function() Teleport(Vector3(-1558.5793457031, 18.396139144897, 665.70147705078)); end);
+    Main:Button("Donut Shop", function() Teleport(Vector3(161.52265930176, 19.215852737427, -1597.4591064453)); end);
 
--- Aimbot
-local GetClosestPlayer; do 
-    local Aimbot = UI.New({
-        Title = "Aimbot"
-    });
+    Main = Player:Section("Aimbot");
 
-    Aimbot.Toggle({
-        Text = "Enabled",
-        Callback = function(bool) 
-            Flags.Aimbot = bool;
-        end
-    });
+    Main:Toggle("Enabled", function(bool) 
+        Flags.Aimbot = bool;
+    end);
 
-    Aimbot.Dropdown({
-        Text = "Target Part",
-        Callback = function(value) 
-            Flags.AimbotTarget = value;
-        end,
-        Options = {
-            "Head",
-            "HumanoidRootPart"
-        }
-    });
+    Main:Dropdown("Target Part", "Head", { "Head", "HumanoidRootPart" }, function(value) 
+        Flags.AimbotTarget = value;
+    end)
 
     GetClosestPlayer = function() 
         if not LocalPlayer.Character or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
@@ -687,7 +545,7 @@ Vehicle.OnVehicleEntered:Connect(function(Vehicle)
     end;
 
     if Flags.VehicleColor then
-        Flags.VehicleColor:SetColor(Vehicle.Model.Model.Body.Color);
+        Flags.VehicleColor:UpdateColor(Vehicle.Model.Model.Body.Color);
     end;
 end);
 
@@ -759,13 +617,14 @@ Game.RunService.RenderStepped:Connect(function()
     if Flags.Pickpocket then
         local Closest = GetClosestPlayer();
         if Closest and Closest.Team.Name == "Police" then
-            if Flags.PickpocketRebounce and Flags.PickpocketRebounce - tick() < 2 then return end;
-            local C = (Closest.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).magnitude; 
-            if C > 15 then return end;
-
-            Event:FireServer(Keys.AttemptPickPocket, Closest.Name);
-            SynapseNotification(string.format("Pickpocketed %s. Run!", Closest.Name));
-            Flags.PickpocketRebounce = tick();
+            if Flags.PickpocketRebounce and Flags.PickpocketRebounce - tick() > 2 then 
+                local C = (Closest.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).magnitude; 
+                if C <= 15 then
+                    Event:FireServer(Keys.AttemptPickPocket, Closest.Name);
+                    SynapseNotification(string.format("Pickpocketed %s. Run!", Closest.Name));
+                    Flags.PickpocketRebounce = tick();
+                end;
+            end;
         end;
     end;
 
@@ -773,28 +632,7 @@ Game.RunService.RenderStepped:Connect(function()
         local Closest = GetClosestPlayer();
         if Closest and Closest.Team.Name == "Criminal" then
             local C = (Closest.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).magnitude; 
-            if C > 15 then return end;
-
-            local EquippedItem = Equipped.getEquipped()[1];
-            if EquippedItem and Tostring(EquippedItem.obj) ~= "Handcuffs" or Tostring(EquippedItem.obj) ~= "Cuffed" then
-                for i,v in Pairs(Equipped.getInventoryItemsFor(LocalPlayer)) do
-                    if Tostring(v.obj) == "Handcuffs" then
-                        Equipped.toggleEquip(v);
-                        break;
-                    end;
-                end;
-            end;
-
-            Event:FireServer(Keys.AttemptArrest, Closest.Name);
-        end;
-    end;
-
-    if Flags.EjectLoop then
-        for i,v in Pairs(GetChildren(Workspace.Vehicles)) do
-            if FindFirstChild(v, "Seat") then
-                local C = (v.Seat.Position - LocalPlayer.Character.HumanoidRootPart.Position).magnitude;
-                if C > 10 then return end;
-
+            if C <= 15 then
                 local EquippedItem = Equipped.getEquipped()[1];
                 if EquippedItem and Tostring(EquippedItem.obj) ~= "Handcuffs" or Tostring(EquippedItem.obj) ~= "Cuffed" then
                     for i,v in Pairs(Equipped.getInventoryItemsFor(LocalPlayer)) do
@@ -805,212 +643,31 @@ Game.RunService.RenderStepped:Connect(function()
                     end;
                 end;
 
-                Event:FireServer(Keys.AttemptVehicleEject, v);
+                Event:FireServer(Keys.AttemptArrest, Closest.Name);
+            end;
+        end;
+    end;
+
+    if Flags.EjectLoop then
+        for i,v in Pairs(GetChildren(Workspace.Vehicles)) do
+            if FindFirstChild(v, "Seat") then
+                local C = (v.Seat.Position - LocalPlayer.Character.HumanoidRootPart.Position).magnitude;
+                if C <= 10 then
+                    local EquippedItem = Equipped.getEquipped()[1];
+                    if EquippedItem and Tostring(EquippedItem.obj) ~= "Handcuffs" or Tostring(EquippedItem.obj) ~= "Cuffed" then
+                        for i,v in Pairs(Equipped.getInventoryItemsFor(LocalPlayer)) do
+                            if Tostring(v.obj) == "Handcuffs" then
+                                Equipped.toggleEquip(v);
+                                break;
+                            end;
+                        end;
+                    end;
+    
+                    Event:FireServer(Keys.AttemptVehicleEject, v);
+                end;
             end;
         end;
     end;
 end);
 
 SynapseNotification(string.format("Loaded in %ss", tick() - TNow), ToastType.Success);
--- Will add more features later
-
---Gun
---[[
-    {
-    ["FireFreq"] = 12,
-    ["CamShakeMagnitude"] = 10,
-    ["Price"] = 15000,
-    ["BulletSpeed"] = 1050,
-    ["ImageId"] = 880310767,
-    ["Motion"] = {
-        ["RightElbowAngle"] = 0,
-        ["LeftElbowAngle"] = 0,
-        ["Scope"] = {
-            ["Springs"] = {
-                ["ItemOffset"] = "vector",
-                ["ItemRotation"] = "vector",
-                ["NeckRotation"] = "vector"
-            }
-        },
-        ["Hip"] = {
-            ["Springs"] = {
-                ["ItemOffset"] = "vector",
-                ["ItemRotation"] = "vector",
-                ["NeckRotation"] = "vector"
-            }
-        },
-        ["RightWristRotation"] = newproxy(),
-        ["LeftWristRotation"] = newproxy()
-    },
-    ["MagSize"] = 30,
-    ["ReloadTime"] = 1.5,
-    ["FireAuto"] = true,
-    ["Sound"] = {
-        ["gun_semi_auto_rifle_magazine_unload_01"] = 2121005857,
-        ["gun_semi_auto_rifle_shot_01"] = 2121007712,
-        ["gun_semi_auto_rifle_magazine_load_01"] = 2121005623,
-        ["gun_semi_auto_rifle_dry_fire_01"] = 2121005402
-    },
-    ["Damage"] = 6
-}
-]]
-
---Vehicle
---[[
-{
-    ["IK"] = {
-        ["LeftShoulder"] = newproxy(),
-        ["RightShoulder"] = newproxy(),
-        ["LeftWrist"] = newproxy(),
-        ["RightWrist"] = newproxy(),
-        ["RightElbow"] = newproxy(),
-        ["LeftElbow"] = newproxy()
-    },
-    ["Bounce"] = 100,
-    ["TireHealth"] = 1,
-    ["TurnSpeed"] = 1.4,
-    ["Mass"] = 198626.34140599,
-    ["Cd"] = 0.4257,
-    ["Suspension"] = 4,
-    ["DriveThruster"] = newproxy(),
-    ["SirenSound"] = newproxy(),
-    ["TirePopDuration"] = 7.5,
-    ["Traction"] = 1,
-    ["WeldSteer"] = newproxy(),
-    ["RotY"] = 0,
-    ["VisualHalfHeight"] = 1.4000000953674,
-    ["PartFrontRight"] = newproxy(),
-    ["vSandstone"] = 0,
-    ["Sounds"] = {
-        ["Grass"] = newproxy(),
-        ["Idle"] = newproxy(),
-        ["OffLow"] = newproxy(),
-        ["OnMid"] = newproxy(),
-        ["Asphalt"] = newproxy(),
-        ["OnLow"] = newproxy(),
-        ["DriftSqueal"] = newproxy(),
-        ["OnHigh"] = newproxy(),
-        ["Sandstone"] = newproxy()
-    },
-    ["_flagBrakelightsEnabled"] = false,
-    ["Locked"] = false,
-    ["Force"] = 794505.36562395,
-    ["GarageEngineSpeed"] = 0,
-    ["AreTiresPopped"] = false,
-    ["LastForward"] = 0,
-    ["Gears"] = {
-        [1] = 3.27,
-        [2] = 3.2,
-        [3] = 4.06,
-        [4] = 2.37,
-        [5] = 1.55,
-        [6] = 1.16,
-        [7] = 0.85,
-        [8] = 0.67
-    },
-    ["Nitrous"] = {
-        [1] = newproxy(),
-        [2] = newproxy(),
-        [3] = newproxy(),
-        [4] = newproxy()
-    },
-    ["LastAudioScale"] = 1634440555.1666,
-    ["seatMaid"] = {
-        ["_tasks"] = {
-            [1] = newproxy(),
-            [2] = "function",
-            [3] = newproxy(),
-            [4] = newproxy(),
-            [5] = "function",
-            [6] = "function"
-        }
-    },
-    ["Model"] = newproxy(),
-    ["Height"] = 3,
-    ["Crr"] = 320,
-    ["t3"] = 0,
-    ["Lift"] = newproxy(),
-    ["Wheels"] = {
-        ["WheelFrontRight"] = {
-            ["Part"] = newproxy(),
-            ["Thruster"] = newproxy()
-        },
-        ["WheelFrontLeft"] = {
-            ["Part"] = newproxy(),
-            ["Thruster"] = newproxy()
-        },
-        ["WheelBackRight"] = {
-            ["Part"] = newproxy(),
-            ["Thruster"] = newproxy()
-        },
-        ["WheelBackLeft"] = {
-            ["Part"] = newproxy(),
-            ["Thruster"] = newproxy()
-        }
-    },
-    ["SoundType"] = "F40",
-    ["GarageSuspensionHeight"] = 0,
-    ["Cb"] = 18000,
-    ["RadioSound"] = newproxy(),
-    ["DespawnTime"] = 120,
-    ["FrictionThruster"] = newproxy(),
-    ["TeamRestrict"] = "Police",
-    ["GarageBrakes"] = 0,
-    ["Damping"] = 7945.0536562395,
-    ["HasSpoiler"] = false,
-    ["_flagHeadlightsEnabled"] = false,
-    ["EnumMakeId"] = 29,
-    ["TiresLastPop"] = {
-        [1] = 0,
-        [2] = 0,
-        [3] = 0,
-        [4] = 0
-    },
-    ["PartBackRight"] = newproxy(),
-    ["Team"] = "Police",
-    ["Rotate"] = newproxy(),
-    ["LastRPM"] = 0,
-    ["vGrass"] = 0,
-    ["LastGear"] = 1,
-    ["PartBackLeft"] = newproxy(),
-    ["Gear"] = 1,
-    ["Type"] = "Chassis",
-    ["Seats"] = {
-        [1] = {
-            ["PlayerTag"] = newproxy(),
-            ["IsPassenger"] = false,
-            ["PlayerNamev"] = newproxy(),
-            ["Depart"] = newproxy(),
-            ["Part"] = newproxy()
-        },
-        [2] = {
-            ["PlayerTag"] = newproxy(),
-            ["IsPassenger"] = true,
-            ["PlayerNamev"] = newproxy(),
-            ["Depart"] = newproxy(),
-            ["Part"] = newproxy()
-        }
-    },
-    ["vAsphalt"] = 0,
-    ["Seat"] = newproxy(),
-    ["PartFrontLeft"] = newproxy(),
-    ["TirePopProportion"] = 0.5,
-    ["WheelRotation"] = 0,
-    ["vHeading"] = 0,
-    ["LastDrift"] = 0,
-    ["serverSeatMaid"] = {
-        ["_tasks"] = {}
-    },
-    ["GarageSelection"] = {
-        ["Rim"] = "Blade",
-        ["BodyColor"] = "Blue",
-        ["WindowColor"] = "Black",
-        ["WheelColor"] = "Grey",
-        ["SuspensionHeight"] = "Normal",
-        ["Engine"] = "Level 1",
-        ["Brakes"] = "Level 1"
-    },
-    ["Make"] = "Camaro",
-    ["SeatWeld"] = newproxy()
-}
-]]
