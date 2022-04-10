@@ -13,6 +13,8 @@ Window:Tab(<string name>)
 Section:
 ```lua
 Tab:Section(<string name>)
+Section:SetLeft() -- Pushes section to the left of tab
+Section:SetRight() -- Pushes section to the right of tab
 ```
 
 \- Ui Elements -
