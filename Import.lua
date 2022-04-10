@@ -12,10 +12,6 @@ local Import do
             }
         });
 
-        if Response.Status ~= 200 then
-            error(format("Import fetch failed: https://api.github.com/repos/NotDSF/FateHub/contents/%s", name));
-        end;
-
         local ResponseBody = HttpService.JSONDecode(HttpService, Response.Body);
         local res, err = loadstring(decode(ResponseBody.content));
         if not res then
