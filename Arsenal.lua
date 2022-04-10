@@ -130,8 +130,6 @@ BackupIndex = Hookmetamethod(Game, "__index", newcclosure(function(self, idx)
         return 50;
     elseif Flags.InfiniteAmmo and self == ammocount and idx == "Value" then
         return 100;
-    elseif Flags.FieldOfView and self == Camera and idx == "FieldOfView" then
-        return Flags.FieldOfView;
     elseif Flags.NoSpread and self == currentspread and idx == "Value" then
         return 0;
     end;
@@ -356,7 +354,7 @@ do
         Flags.WalkSpeed = value;
     end);
 
-    Main:Slider("JumpHeight", 1, 200, LocalPlayer.Character.Humanoid.JumpHeight, function(value) 
+    Main:Slider("JumpHeight", 1, 200, floor(LocalPlayer.Character.Humanoid.JumpHeight), function(value) 
         Flags.JumpHeight = value;
     end);
 
@@ -374,7 +372,7 @@ do
 
     Main:Toggle("Full Bright", false, function(value) game.Lighting.Brightness = value and 5 or 3; end);
     Main:Toggle("Shadows", game.Lighting.GlobalShadows, function(value) game.Lighting.GlobalShadows = value; end);
-    Main:Slider("FOV", 1, 70, 70, function(value) Flags.FieldOfView = value; end);
+    Main:Slider("FOV", 1, 120, 70, function(value) LocalPlayer.Settings.FOV.Value = value; end);
     Main:Slider("Time", 1, 24, string.match(game.Lighting.TimeOfDay, "(%d+):%d+:%d+") + 0, function(value) game.Lighting.TimeOfDay = string.format("%d:00:00", value); end);
 
     local ESP = Visual:Section("ESP");
