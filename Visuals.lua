@@ -51,7 +51,7 @@ function Visuals:Add(object)
         options = options or {};
 
         local textDynamic = TextDynamic.new();
-        textDynamic.Position = PointInstance.new(object, options.Offset and CFrame.new(Vector3.new(unpack(options.Offset))))
+        textDynamic.Position = options.Offset and PointInstance.new(object, CFrame.new(Vector3.new(unpack(options.Offset)))) or PointInstance.new(object);
         options.Offset = nil
         DrawUtils:SetProperties(textDynamic, options);
         textDynamic.Text = text
@@ -70,7 +70,7 @@ function Visuals:Add(object)
         from = from or Point2D.new(viewportSize.X / 2, viewportSize.Y);
 
         local lineDynamic = LineDynamic.new();
-        lineDynamic.To = PointInstance.new(object, options.Offset and CFrame.new(Vector3.new(unpack(options.Offset))))
+        lineDynamic.To = options.Offset and PointInstance.new(object, CFrame.new(Vector3.new(unpack(options.Offset)))) or PointInstance.new(object);
         options.Offset = nil
         DrawUtils:SetProperties(lineDynamic, options);
         lineDynamic.Color = options.Color or defaultColor

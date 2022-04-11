@@ -125,6 +125,7 @@ local settings = {
         rage_bot = false,
         auto_shoot = false,
         silent_aim = false,
+        wall_check = true,
         wallbang = false,
         redirect = "Head"
     },
@@ -192,6 +193,39 @@ __newindex = hookmetamethod(game, "__newindex", function(self, prop, value)
     end
     return __newindex(self, prop, value);
 end);
+
+local began;
+local mouse1press = function()
+    -- firesignal(UserInputService.InputBegan, Enum.UserInputType.MouseButton1);
+    local args = {KeyCode=nil, UserInputType=Enum.UserInputType.MouseButton1};
+    if (not began) then
+        for index, connection in pairs(getconnections(UserInputService.InputBegan)) do
+            local func = connection.Function
+            if (func and getinfo(func, "s").source == "=ReplicatedStorage.Modules.Input") then
+                began = func
+                func(args, false);
+            end
+        end
+    else
+        began(args, false);
+    end
+end
+local ended;
+local mouse1release = function()
+    -- firesignal(UserInputService.InputEnded, Enum.UserInputType.MouseButton1);
+    local args = {KeyCode=nil, UserInputType=Enum.UserInputType.MouseButton1};
+    if (not ended) then
+        for index, connection in pairs(getconnections(UserInputService.InputEnded)) do
+            local func = connection.Function
+            if (func and getinfo(func, "s").source == "=ReplicatedStorage.Modules.Input") then
+                ended = func
+                ended(args, false);
+            end
+        end
+    else
+        ended(args, false);
+    end
+end
 
 local flyChar = function(camera, root, speed)
     local bodyGyro = Instance.new("BodyGyro");
@@ -519,7 +553,7 @@ local getClosestPlayer = function()
             end
 
             local parts = GetPartsObscuringTarget(currentCamera, {currentCamera.CFrame.Position, redirect_rage.CFrame.Position}, {localChar, character});
-            if (enemy and #parts == 0 and vector3Magnitude <= noPartsVector3Distance) then
+            if (enemy and (#parts == 0 or not rageSettings.wall_check) and vector3Magnitude <= noPartsVector3Distance) then
                 noPartsVector3Distance = vector3Magnitude
                 closest[6] = character
             end
@@ -771,7 +805,7 @@ initProjectile = hookfunction(TS.Projectiles.InitProjectile, function(...)
 
         if (rageSettings.auto_shoot and target_char) then
             hitbox = target_char.Hitbox
-            args[3] = (hitbox[rageSettings.redirect].CFrame.Position + (Vector3.new(random(1, 10), random(1, 10), random(1, 10)) / 10)) - args[4]
+            args[3] = hitbox[rageSettings.redirect].CFrame.Position - args[4]
             return initProjectile(unpack(args));
         end
 
@@ -779,7 +813,8 @@ initProjectile = hookfunction(TS.Projectiles.InitProjectile, function(...)
             hitbox = closestCharacter.Hitbox
             local viewable = GetPartsObscuringTarget(currentCamera, {currentCamera.CFrame.Position, hitbox[rageSettings.redirect].CFrame.Position}, {aliveCharacters[localPlayer], closestCharacter});
             if (rageSettings.silent_aim and #viewable == 0 or rageSettings.wallbang) then
-                args[3] = (hitbox[rageSettings.redirect].CFrame.Position + (Vector3.new(random(1, 10), random(1, 10), random(1, 10)) / 10)) - args[4]
+                args[3] = hitbox[rageSettings.redirect].CFrame.Position - args[4]
+                -- args[4] = 
                 return initProjectile(unpack(args));
             end
         end
@@ -800,7 +835,7 @@ initProjectile = hookfunction(TS.Projectiles.InitProjectile, function(...)
                 for character, characterTrackers in pairs(trackers) do
                     local DoBackTrack = table.find(characterTrackers, part);
                     if (DoBackTrack and hitbox) then
-                        args[3] = (hitbox[aimbotSettings.lock_on].CFrame.Position + (Vector3.new(random(1, 10), random(1, 10), random(1, 10)) / 10)) - args[4]
+                        args[3] = hitbox[aimbotSettings.lock_on].CFrame.Position - args[4]
                         return initProjectile(unpack(args));
                     end
                 end
@@ -993,6 +1028,9 @@ other:Toggle("Show Backtrack Hitbox", backtrackSettings.show_backtrack, function
 end):Colorpicker(backtrackSettings.backtrack_color, function(callback)
     backtrackSettings.backtrack_color = callback
 end);
+other:Toggle("Bullet Tracers", false, function()
+    
+end);
 other:Toggle("Third Person", characterSettings.third_person, function(callback)
     characterSettings.third_person = callback
 end);
@@ -1056,6 +1094,9 @@ local rage = mainWindow:Tab("Rage");
 local ragemain = rage:Section("Main");
 ragemain:Toggle("Auto Shoot", rageSettings.auto_shoot, function(callback)
     rageSettings.auto_shoot = callback
+end);
+ragemain:Toggle("Wall Check", rageSettings.wall_check, function(callback)
+    rageSettings.wall_check = callback
 end);
 ragemain:Toggle("Silent Aim", rageSettings.silent_aim, function(callback)
     rageSettings.silent_aim = callback
