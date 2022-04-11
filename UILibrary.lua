@@ -1287,4 +1287,4 @@ function UiLib:CreateWindow(Name, Game, ColorScheme)
     return WindowReturn
 end
 
-Return UiLib
+return UiLib
