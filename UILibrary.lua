@@ -513,7 +513,11 @@ local function UiElements(Section, SectionTable, Ret)
 		end);
 
         local function ToggleSet(set)
-            Ret.Toggle = set or not Ret.Toggle
+            if set ~= nil then
+                Ret.Toggle = set
+            else
+                Ret.Toggle = not Ret.Toggle
+            end
             Callback(Ret.Toggle)
 
             TweenService:Create(Status, TweenInfo.new(0.2), {
@@ -1264,7 +1268,7 @@ function UiLib:CreateWindow(Name, Game, ColorScheme)
                 for i,v in pairs(d) do
                     local Element = Section[i]
 					if (not Element) then continue; end
-                    if v.Type == 'Toggle' then print(i, 'set', Element.Toggle)v:UpdateToggle(Element.Toggle)
+                    if v.Type == 'Toggle' then print(i, 'set', Element.Toggle) v:UpdateToggle(Element.Toggle)
                     elseif v.Type == 'Dropdown' then print(i, 'set', Element.Selected)v:UpdateSelected(Element.Selected)
                     elseif v.Type == 'Slider' then v:UpdateValue(Element.SlideValue)
                     elseif v.Type == 'Colorpicker' then local ColorTable = Element.ColorTable; v:UpdateColor(Color3.new(ColorTable.R, ColorTable.G, ColorTable.B))
@@ -1283,4 +1287,4 @@ function UiLib:CreateWindow(Name, Game, ColorScheme)
     return WindowReturn
 end
 
-return UiLib;
+Return UiLib
