@@ -15,7 +15,7 @@ local Import do
         local ResponseBody = HttpService.JSONDecode(HttpService, Response.Body);
         local res, err = loadstring(decode(ResponseBody.content));
         if not res then
-            return err;
+            error(err, 0);
         end;
 
         return res();
