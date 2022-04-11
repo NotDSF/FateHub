@@ -3,6 +3,10 @@ getgenv().FatesHub = true;
 
 ToastType = ToastType or {};
 
+if not isfolder("FatesHub") then makefolder("FatesHub") end;
+if not isfolder("FatesHub/configs") then makefolder("FatesHub/configs") end;
+if not isfolder("FatesHub/configs/Arsenal") then makefolder("FatesHub/configs/Arsenal") end;
+
 type Toggle = { UpdateToggle: (self: Toggle, toset: boolean) -> nil, UpdateTitle: (self: Toggle, name: string) -> nil }
 type Dropdown = { UpdateList: (self: Dropdown, list: {}) -> nil, UpdateTitle: (self: Dropdown, name: string) -> nil }
 type Colorpicker = { UpdateColor: (self: Colorpicker, NewColor: Color3) -> nil, UpdateTitle: (self: Colorpicker, name: string) -> nil }
@@ -30,8 +34,32 @@ type Section = { Section: (self: Section, name: string) -> Main }
 type Window = { Tab: (self: Window, name: string) -> Section, VisiblityKey: Enum.KeyCode }
 type Library = { CreateWindow: (self: Library, name: string, game: string, colorscheme: Color3?) -> Window }
 
+local Import do
+    local request = syn.request;
+    local format = string.format;
+    local HttpService = game.HttpService;
+    local decode = syn.crypt.base64.decode;
+
+    Import = function(name) 
+        local Response = request({
+            Url = format("https://api.github.com/repos/NotDSF/FateHub/contents/%s", name),
+            Headers = {
+                Authorization = "bearer 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"
+            }
+        });
+
+        local ResponseBody = HttpService.JSONDecode(HttpService, Response.Body);
+        local res, err = loadstring(decode(ResponseBody.content));
+        if not res then
+            return err;
+        end;
+
+        return res();
+    end;
+end;
+
 local TNow = tick();
-local Lib: Library = loadstring(readfile("UILib.lua"))();
+local Lib: Library = Import("UILibrary.lua");
 local Window = Lib:CreateWindow("Fate Hub", "Arsenal", Color3.fromRGB(255, 50, 150));
 Window:SetKeybindClose(Enum.KeyCode.F5);
 
@@ -75,6 +103,7 @@ local Point2D = Point2D.new;
 local filtergc = filtergc;
 local Ray = Ray.new;
 local unpack = unpack;
+local LineOffset = Vector2(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y);
 
 local Flags, ESPObjects, ESPLines = {}, {}, {};
 local BackupIndex, BackupNewIndex, BackupNamecall;
@@ -149,12 +178,13 @@ BackupRot = Hookfunction(RotCamera, function(...)
     return BackupRot(...);
 end);
 
-local FOV = Drawing.new("Circle");
+local FOV = Circle.new()
 FOV.Visible = false;
 FOV.Thickness = 1;
 FOV.Radius = 200;
 FOV.Position = Vector2(Mouse.X, Mouse.Y);
 FOV.Color = fromHSV(0, 0.0, 1);
+FOV.NumSides = 0;
 
 local function GetClosestPlayer(novisible, maxdistance) 
     if not LocalPlayer.Character or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
@@ -231,8 +261,16 @@ local function AddBox(player)
     local Bottom = PointInstance(HumanoidRootPart, CFrame(Vector3(-2.2, -3, 0)));
     local TextPoint = PointInstance(HumanoidRootPart, CFrame(Vector3(0, 3.8, 0)));
 
+    local LineBottom = PointInstance(HumanoidRootPart, CFrame(Vector3(-2.6, -3, 0)));
+    local LineTop = PointInstance(HumanoidRootPart, CFrame(Vector3(-2.6, 3, 0)));
+
     local Rect = RectDynamic(Top, Bottom);
     local Text = TextDynamic(TextPoint);
+    local HealthBar = LineDynamic(LineBottom, LineTop);
+
+    HealthBar.Visible = true;
+    HealthBar.Color = Color3(0.0, 1.0, 0.082352);
+    HealthBar.Outlined = true;
 
     Text.Text = player.Name;
     Text.Color = Color3(1, 1, 1);
@@ -248,6 +286,9 @@ local function AddBox(player)
     Object.Text = Text;
     Object.Player = player;
     Object.Character = Character;
+    Object.TextPoint = TextPoint;
+    Object.HealthBar = HealthBar;
+    Object.HealthBarTop = LineTop;
 
     player.CharacterRemoving:Connect(function(char)
         if ESPObjects[char] then
@@ -268,10 +309,13 @@ local function AddLine(player)
     local Character = player.Character;
     local Head = Character.Head;
 
+    local To = Point2D();
+    To.PointVec2 = LineOffset;
+
     local Line = LineDynamic();
     Line.Visible = true;
     Line.From = PointInstance(Head);
-    Line.To = Point2D(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y);
+    Line.To = To;
     Line.Color = Color3(255, 255, 255)
     Line.Thickness = 1;
 
@@ -316,7 +360,7 @@ do
     Aimbot:Toggle("Enabled", false, function(value) Flags.Aimbot = value end);
     Aimbot:Toggle("Visible Check", true, function(value) Flags.AimbotVisible = value; end);
     Aimbot:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.AimbotTarget = selected; end);
-    Aimbot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.AimbotMaxDistance = value; end)
+    Aimbot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.AimbotMaxDistance = value; end);
 
     local SilentAim = LegitTab:Section("Silent Aim");
     SilentAim:Toggle("Enabled", false, function(value) Flags.SilentAim = value; end);
@@ -325,6 +369,7 @@ do
     local FOVCircle = SilentAim:Toggle("Show FOV Circle", true, function(value) FOV.Visible = value; end);
     SilentAim:Slider("FOV", 1, 2000, 200, function(value) FOV.Radius = value; end);
     SilentAim:Slider("Circle Thickness", 1, 100, 1, function(value) FOV.Thickness = value; end);
+    SilentAim:Slider("Circle Sides", 0, 100, 0, function(value) FOV.NumSides = value; end);
     FOVCircle:Colorpicker(Color3(0.313725, 0.988235, 0), function(value) FOV.Color = value; end);
 
     local Weapon = LegitTab:Section("Weapon");
@@ -413,8 +458,15 @@ do
     local TeamToggle = ESP:Toggle("Show Team", true, function(value) Flags.ShowTeam = value; end);
     local EnemyToggle = ESP:Toggle("Show Enemy", true, function(value) Flags.ShowEnemy = value; end);
 
-    ESP:Slider("Max Distance", 1, 2000, 1000, function(value) Flags.ESPMaxDistance = value; end);
+    ESP:Toggle("Box Outline", true, function(value) Flags.BoxOutline = value; end);
     ESP:Slider("Box Thickness", 1, 100, 1, function(value) Flags.ESPBoxThickness = value; end);
+
+    ESP:Toggle("Text Outline", true, function(value) Flags.TextOutline = value; end);
+    ESP:Slider("Text Size", 1, 20, 18, function(value) Flags.TextSize = value; end);
+    ESP:Slider("Text Offset X", -10, 10, 0, function(value) local c = Flags.TextOffset; Flags.TextOffset = CFrame(Vector3(value, c.Y, c.Z)); end);
+    ESP:Slider("Text Offset Y", -10, 10, 3.8, function(value) local c = Flags.TextOffset; Flags.TextOffset = CFrame(Vector3(c.X, value, c.Z)); end);
+    ESP:Slider("Tracer Offset Y", LineOffset.Y, 0, LineOffset.Y, function(value) LineOffset = Vector2(LineOffset.X, value) end);
+    ESP:Slider("Max Distance", 1, 2000, 1000, function(value) Flags.ESPMaxDistance = value; end);
 
     TeamToggle:Colorpicker(Color3(0.274509, 0.972549, 0.392156), function(value) Flags.ESPTeamColor = value; end);
     EnemyToggle:Colorpicker(Color3(0.972549, 0.274509, 0.286274), function(value) Flags.ESPEnemyColor = value; end);
@@ -426,12 +478,20 @@ do
     Flags.ESPMaxDistance = 1000;
     Flags.ShowTeam = true;
     Flags.ShowEnemy = true;
+    Flags.BoxOutline = true;
+    Flags.TextOutline = true;
+    Flags.TextSize = 18;
+    Flags.TextOffset = CFrame(Vector3(0, 3.8, 0));
 end;
 
 -- Misc
 do 
     local Misc = Window:Tab("Misc");
     local Main = Misc:Section("Main");
+    
+    Main:Button("Rejoin", function() 
+        Game.TeleportService:TeleportToPlaceInstance(Game.PlaceId, Game.JobId);
+    end);
 
     Main:Toggle("Staff Check", true, function(value) 
         if value then
@@ -446,25 +506,46 @@ do
     
     local Options = Misc:Section("Options");
     Options:Keybind("UI Open", Enum.KeyCode.F5, function(Keybind) Window:SetKeybindClose(Keybind); end, function() end);
-
-    for i,v in Pairs(GetChildren(GPlayers)) do
-        if ModCheck.isMod(v) then
-            SynapseNotification("A moderator is in your game!", ToastType.Warning);
-        end;
-    end;
+    Options:Button("Reset UI", function() 
+        Window:LoadConfig(loadfile("FatesHub/configs/Arsenal/default.bin"));
+    end);
 
     Flags.ModCheck = true;
 
-    --[[
-            local Config = Misc:Section("Configs");
-    Config:Button("Save Config", function() 
-        writefile("test.json", Window:GenerateConfig());
+    local function GrabConfigs() 
+        local Configs = {};
+        for i,v in Pairs(listfiles("FatesHub/configs/Arsenal")) do
+            local name = v:split("\\")[4];
+            if name:split(".")[2] == "json" then
+                Configs[i] = name;
+            end;
+        end;
+        return Configs;
+    end;
+
+    local Config, CurrentName = Misc:Section("Configs"), "main.json";
+    
+    Config:UserInput("Config Name", "main.json", function(value) 
+        CurrentName = value;
     end);
 
-    Config:Button("Load Config", function() 
-        Window:LoadConfig(readfile("test.json"));
+    Config:Button("Save Config", function() 
+        writefile(format("FatesHub/configs/Arsenal/%s", CurrentName), Window:GenerateConfig());
+        SynapseNotification(format("Saved config to '%s'", CurrentName));
     end);
-    ]]
+
+    local ConfigDropdown = Config:Dropdown("Configs", "main.json", GrabConfigs(), function(value) 
+        Window:LoadConfig(readfile(format("FatesHub/configs/Arsenal/%s", value)));
+        SynapseNotification(format("Loaded config '%s'", value));
+    end);
+
+    Config:Button("Refresh Configs", function()
+        ConfigDropdown:UpdateList(GrabConfigs())
+    end);
+end;
+
+if not isfile("FatesHub/configs/Arsenal/default.bin") then
+    writefile("FatesHub/configs/Arsenal/default.bin", Window:GenerateConfig());
 end;
 
 BackupNamecall = hookmetamethod(game, "__namecall", function(self, ...) 
@@ -526,27 +607,40 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
             local Player = v.Player;
             local Character = v.Character;
             local Distance = floor((LocalPlayer.Character.Head.Position - Character.Head.Position).magnitude);
+            local Rect, Text, HealthBar = v.Rect, v.Text, v.HealthBar;
 
-            v.Text.Visible = Distance < Flags.ESPMaxDistance;
-            v.Rect.Visible = Distance < Flags.ESPMaxDistance;
+            Text.Visible = Distance < Flags.ESPMaxDistance;
+            Rect.Visible = Distance < Flags.ESPMaxDistance;
+            HealthBar.Visible = Distance < Flags.ESPMaxDistance;
 
             if Distance < Flags.ESPMaxDistance then
-                v.Rect.Thickness = Flags.ESPBoxThickness;
+                Rect.Outlined = Flags.BoxOutline;
+                Rect.Thickness = Flags.ESPBoxThickness;
+
+                Text.Outlined = Flags.TextOutline;
+                Text.Size = Flags.TextSize;
+
+                if Flags.TextOffset ~= v.TextPoint.Offset then
+                    v.TextPoint.Offset = Flags.TextOffset;
+                end;
 
                 -- I hate this CODE
                 if Player.TeamColor == LocalPlayer.TeamColor then
                     Color = Flags.ESPTeamColor;
-                    v.Text.Visible = Flags.ShowTeam;
-                    v.Rect.Visible = Flags.ShowTeam;
+                    Text.Visible = Flags.ShowTeam;
+                    Rect.Visible = Flags.ShowTeam;
+                    HealthBar.Visible = Flags.ShowTeam;
                 else
                     Color = Flags.ESPEnemyColor;
-                    v.Text.Visible = Flags.ShowEnemy;
-                    v.Rect.Visible = Flags.ShowEnemy;
+                    Text.Visible = Flags.ShowEnemy;
+                    Rect.Visible = Flags.ShowEnemy;
+                    HealthBar.Visible = Flags.ShowEnemy;
                 end;
-    
-                v.Text.Text = format("%s | %d", Player.Name, Distance);
-                v.Text.Color = Color;
-                v.Rect.Color = Color;
+                
+                v.HealthBarTop.Offset = CFrame(Vector3(-2.6, math.clamp(3 + ((-6 / 100) * (100 - Player.NRPBS.Health.Value)), 0, 3), 0));
+                Text.Text = format("%s | %d | [%d | 100]", Player.Name, Distance, Player.NRPBS.Health.Value);
+                Text.Color = Color;
+                Rect.Color = Color;
             end;
         end;
     end;
@@ -558,8 +652,10 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
             local Distance = floor((LocalPlayer.Character.Head.Position - Character.Head.Position).magnitude) < Flags.ESPMaxDistance;
 
             v.Line.Visible = Distance;
-
+            
             if Distance then
+                v.Line.To.PointVec2 = LineOffset;
+
                 if Player.TeamColor == LocalPlayer.TeamColor then
                     Color = Flags.ESPTeamColor;
                     v.Line.Visible = Flags.ShowTeam;
