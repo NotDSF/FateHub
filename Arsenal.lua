@@ -1,4 +1,4 @@
-if getgenv().FatesHub then error("Fates Hub already loaded!"); end;
+if FatesHub then error("Fates Hub already loaded!"); end;
 getgenv().FatesHub = true;
 
 ToastType = ToastType or {};
@@ -147,6 +147,7 @@ local Crouch = GetLocal("ctrlcrouch");
 local Weapon = GetLocal("firebullet");
 local ModCheck = GetLocal("isMod");
 local RotCamera = GetFunction("RotCamera");
+local GunMode = GetLocal("mode");
 local ammocount = Variables.ammocount;
 local equipped = Variables.equipped;
 local currentspread = GetLocal("currentspread").currentspread;
@@ -346,15 +347,21 @@ do
     local Options = LegitTab:Section("Options");
     Options:Toggle("Team Check", false, function(value) Flags.TeamCheck = value; end);
 
-    local RageBot = LegitTab:Section("Rage");
-    RageBot:Toggle("Enabled", false, function(value) Flags.RageBot = value; end);
+    local RageBot, RageToggle = LegitTab:Section("Rage");
+    RageToggle = RageBot:Toggle("Enabled", false, function(value) Flags.RageBot = value; end);
     RageBot:Toggle("Visible Check", false, function(value) Flags.RageVisible = value; end);
     RageBot:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.RageTarget = selected; end);
     RageBot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.RageBotMaxDistane = value; end);
+    RageBot:Keybind("Toggle Key", nil, function() end, function() 
+        RageToggle:UpdateToggle(not Flags.RageBot);
+    end);
 
-    local TriggerBot = LegitTab:Section("Trigger Bot");
-    TriggerBot:Toggle("Enabled", false, function(value) Flags.TriggerBot = value; end);    
+    local TriggerBot, TriggerToggle = LegitTab:Section("Trigger Bot");
+    TriggerToggle = TriggerBot:Toggle("Enabled", false, function(value) Flags.TriggerBot = value; end);    
     TriggerBot:Slider("Delay", 0, 10, 0, function(value) Flags.TriggerBotDelay = value end);
+    TriggerBot:Keybind("Toggle Key", nil, function() end, function() 
+        TriggerToggle:UpdateToggle(not Flags.TriggerBot);
+    end);
 
     local Aimbot = LegitTab:Section("Aimbot");
     Aimbot:Toggle("Enabled", false, function(value) Flags.Aimbot = value end);
@@ -362,9 +369,12 @@ do
     Aimbot:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.AimbotTarget = selected; end);
     Aimbot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.AimbotMaxDistance = value; end);
 
-    local SilentAim = LegitTab:Section("Silent Aim");
-    SilentAim:Toggle("Enabled", false, function(value) Flags.SilentAim = value; end);
+    local SilentAim, SilentToggle = LegitTab:Section("Silent Aim");
+    SilentToggle = SilentAim:Toggle("Enabled", false, function(value) Flags.SilentAim = value; end);
     SilentAim:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.SilentAimTarget = selected; end);
+    SilentAim:Keybind("Toggle Key", nil, function() end, function() 
+        SilentToggle:UpdateToggle(not Flags.SilentAim);
+    end);
 
     local FOVCircle = SilentAim:Toggle("Show FOV Circle", true, function(value) FOV.Visible = value; end);
     SilentAim:Slider("FOV", 1, 2000, 200, function(value) FOV.Radius = value; end);
@@ -374,6 +384,7 @@ do
 
     local Weapon = LegitTab:Section("Weapon");
     Weapon:Toggle("Infinite Ammo", false, function(value) Flags.InfiniteAmmo = value; end);
+    Weapon:Toggle("Automatic", false, function(value) Flags.Automatic = value; end);
     Weapon:Toggle("Rapid Fire", false, function(value) Flags.RapidFire = value; end);
     Weapon:Toggle("Rapid Reload", false, function(value) Flags.RapidReload = value; end);
     Weapon:Toggle("No Recoil", false, function(value) Flags.NoRecoil = value; end);
@@ -736,6 +747,10 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
         if ReloadTime and ReloadTime.Value ~= .02 then
             ReloadTime.Value = .02;
         end;
+    end;
+
+    if Flags.Automatic and GunMode.mode ~= "automatic" then
+        GunMode.mode = "automatic";
     end;
 
     if Flags.WepRainbow and FindFirstChild(Camera, "Arms") then
