@@ -1269,7 +1269,7 @@ function UiLib:CreateWindow(Name, Game, ColorScheme)
                     local Element = Section[i]
                     if (not Element) then continue; end
                     if v.Type == 'Toggle' then v:UpdateToggle(Element.Toggle)
-                    elseif v.Type == 'Dropdown' and not Element.Exclude then v:UpdateSelected(Element.Selected)
+                    elseif v.Type == 'Dropdown' and not v.Exclude then v:UpdateSelected(Element.Selected)
                     elseif v.Type == 'Slider' then v:UpdateValue(Element.SlideValue)
                     elseif v.Type == 'Colorpicker' then local ColorTable = Element.ColorTable; v:UpdateColor(Color3.new(ColorTable.R, ColorTable.G, ColorTable.B))
                     elseif v.Type == 'Keybind' and Element.KeyStr ~= 'nil' then local KeySplit = string.split(Element.KeyStr, '.'); v:UpdateBind(Enum[KeySplit[2]][KeySplit[3]])
