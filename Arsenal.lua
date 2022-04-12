@@ -548,7 +548,7 @@ do
     local ConfigDropdown = Config:Dropdown("Configs", "main.json", GrabConfigs(), function(value) 
         Window:LoadConfig(readfile(format("FatesHub/configs/Arsenal/%s", value)));
         SynapseNotification(format("Loaded config '%s'", value));
-    end);
+    end, true);
 
     Config:Button("Refresh Configs", function()
         ConfigDropdown:UpdateList(GrabConfigs())
