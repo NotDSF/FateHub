@@ -353,6 +353,7 @@ do
     RageBot:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.RageTarget = selected; end);
     RageBot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.RageBotMaxDistane = value; end);
     RageBot:Keybind("Toggle Key", nil, function() end, function() 
+        SynapseNotification(format("%s Rage", not Flags.RageBot and "Enabled" or "Disabled"), ToastType.Warning);
         RageToggle:UpdateToggle(not Flags.RageBot);
     end);
 
@@ -360,6 +361,7 @@ do
     TriggerToggle = TriggerBot:Toggle("Enabled", false, function(value) Flags.TriggerBot = value; end);    
     TriggerBot:Slider("Delay", 0, 10, 0, function(value) Flags.TriggerBotDelay = value end);
     TriggerBot:Keybind("Toggle Key", nil, function() end, function() 
+        SynapseNotification(format("%s Trigger Bot", not Flags.TriggerBot and "Enabled" or "Disabled"), ToastType.Warning);
         TriggerToggle:UpdateToggle(not Flags.TriggerBot);
     end);
 
@@ -373,6 +375,7 @@ do
     SilentToggle = SilentAim:Toggle("Enabled", false, function(value) Flags.SilentAim = value; end);
     SilentAim:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.SilentAimTarget = selected; end);
     SilentAim:Keybind("Toggle Key", nil, function() end, function() 
+        SynapseNotification(format("%s Silent Aim", not Flags.SilentAim and "Enabled" or "Disabled"), ToastType.Warning);
         SilentToggle:UpdateToggle(not Flags.SilentAim);
     end);
 
@@ -476,7 +479,7 @@ do
     ESP:Slider("Text Size", 1, 20, 18, function(value) Flags.TextSize = value; end);
     ESP:Slider("Text Offset X", -10, 10, 0, function(value) local c = Flags.TextOffset; Flags.TextOffset = CFrame(Vector3(value, c.Y, c.Z)); end);
     ESP:Slider("Text Offset Y", -10, 10, 3.8, function(value) local c = Flags.TextOffset; Flags.TextOffset = CFrame(Vector3(c.X, value, c.Z)); end);
-    ESP:Slider("Tracer Offset Y", LineOffset.Y, 0, LineOffset.Y, function(value) LineOffset = Vector2(LineOffset.X, value) end);
+    ESP:Slider("Tracer Offset Y", 0, LineOffset.Y, LineOffset.Y, function(value) LineOffset = Vector2(LineOffset.X, value) end);
     ESP:Slider("Max Distance", 1, 2000, 1000, function(value) Flags.ESPMaxDistance = value; end);
 
     TeamToggle:Colorpicker(Color3(0.274509, 0.972549, 0.392156), function(value) Flags.ESPTeamColor = value; end);
@@ -518,7 +521,7 @@ do
     local Options = Misc:Section("Options");
     Options:Keybind("UI Open", Enum.KeyCode.F5, function(Keybind) Window:SetKeybindClose(Keybind); end, function() end);
     Options:Button("Reset UI", function() 
-        Window:LoadConfig(loadfile("FatesHub/configs/Arsenal/default.bin"));
+        Window:LoadConfig(syn.crypt.decode(syn.crypt.base64.decode(readfile("FatesHub/configs/Arsenal/default.bin")), "78VGc*6bCyjoC$zn0Z#3brOjcR^xRlUl"));
     end);
 
     Flags.ModCheck = true;
@@ -556,7 +559,7 @@ do
 end;
 
 if not isfile("FatesHub/configs/Arsenal/default.bin") then
-    writefile("FatesHub/configs/Arsenal/default.bin", Window:GenerateConfig());
+    writefile("FatesHub/configs/Arsenal/default.bin", syn.crypt.base64.encode(syn.crypt.encrypt(Window:GenerateConfig(), "78VGc*6bCyjoC$zn0Z#3brOjcR^xRlUl")));
 end;
 
 BackupNamecall = hookmetamethod(game, "__namecall", function(self, ...) 
