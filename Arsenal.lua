@@ -105,7 +105,7 @@ local Ray = Ray.new;
 local unpack = unpack;
 local LineOffset = Vector2(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y);
 
-local Flags, ESPObjects, ESPLines = {}, {}, {};
+local Flags, ESPObjects, ESPLines, Spoofed = {}, {}, {}, {};
 local BackupIndex, BackupNewIndex, BackupNamecall;
 
 local function GetLocal(index) 
@@ -167,8 +167,8 @@ BackupIndex = Hookmetamethod(Game, "__index", newcclosure(function(self, idx)
 end));
 
 BackupNewIndex = Hookmetamethod(Game, "__newindex", newcclosure(function(self, idx, val) 
-    if not Checkcaller() and Flags[idx] then
-        val = val + Flags[idx];
+    if not Checkcaller() and Spoofed[idx] then
+        val = val + Spoofed[idx];
     end;
     return BackupNewIndex(self, idx, val);
 end));
@@ -410,11 +410,11 @@ do
     Main:Toggle("Noclip", false, function(value) Flags.NoClip = value; end);
 
     Main:Slider("WalkSpeed", 1, 200, LocalPlayer.Character.Humanoid.WalkSpeed, function(value) 
-        Flags.WalkSpeed = value;
+        Spoofed.WalkSpeed = value;
     end);
 
     Main:Slider("JumpHeight", 1, 200, floor(LocalPlayer.Character.Humanoid.JumpHeight), function(value) 
-        Flags.JumpHeight = value;
+        Spoofed.JumpHeight = value;
     end);
 
     local AntiAim = Player:Section("Anti Aim");
