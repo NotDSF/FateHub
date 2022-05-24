@@ -89,8 +89,32 @@ getgenv().FatesHub = true;
 
 ToastType = ToastType or {};
 
+local Import do
+    local request = syn.request;
+    local format = string.format;
+    local HttpService = game.HttpService;
+    local decode = syn.crypt.base64.decode;
+
+    Import = function(name) 
+        local Response = request({
+            Url = format("https://api.github.com/repos/NotDSF/FateHub/contents/%s", name),
+            Headers = {
+                Authorization = "bearer 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"
+            }
+        });
+
+        local ResponseBody = HttpService.JSONDecode(HttpService, Response.Body);
+        local res, err = loadstring(decode(ResponseBody.content));
+        if not res then
+            return err;
+        end;
+
+        return res();
+    end;
+end;
+
 local TNow = tick();
-local Lib: Library = loadstring(readfile("UILib.lua"))();
+local Lib: Library = Import("UILibrary.lua");
 local Window = Lib:CreateWindow("Fate Hub", "Jailbreak", Color3.fromRGB(255, 50, 150));
 Window:SetKeybindClose(Enum.KeyCode.F5);
 
@@ -217,7 +241,6 @@ end));
 for i,v in Pairs(InternalFunctions) do
     if Type(v) == "function" and table.find(debug.getconstants(v), "%d/%d") then
         InternalFunctions[i] = function(nitro, nitromax) 
-            warn(string.format("debug: nitro %d %d", nitro, nitromax));
             return v(Flags.InfiniteNitro and math.huge or nitro, nitromax);
         end;
     end;
@@ -617,6 +640,7 @@ Game.RunService.RenderStepped:Connect(function()
     if Flags.Pickpocket then
         local Closest = GetClosestPlayer();
         if Closest and Closest.Team.Name == "Police" then
+            Flags.PickpocketRebounce = Flags.PickpocketRebounce or 0;
             if Flags.PickpocketRebounce and Flags.PickpocketRebounce - tick() > 2 then 
                 local C = (Closest.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).magnitude; 
                 if C <= 15 then
