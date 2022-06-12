@@ -109,24 +109,10 @@ local Flags, ESPObjects, ESPLines, Spoofed = {}, {}, {}, {};
 local BackupIndex, BackupNewIndex, BackupNamecall;
 
 local function GetLocal(index) 
-    --[[
-        for i,v in Pairs(Getgc(true)) do
-            if Type(v) == "table" and Rawget(v, index) then
-                return v;
-            end;
-        end;
-    ]]
     return filtergc("table", { Keys = { index } }, true);
 end;
 
 local function GetFunction(name) 
-    --[[
-            for i,v in Pairs(Getgc()) do
-        if Type(v) == "function" and info(v, "n") == name then
-            return v;
-        end;
-    end;
-    ]]
     return filtergc("function", { Name = name }, true);
 end;
 
@@ -148,6 +134,7 @@ local Weapon = GetLocal("firebullet");
 local ModCheck = GetLocal("isMod");
 local RotCamera = GetFunction("RotCamera");
 local GunMode = GetLocal("mode");
+local IsTeam = GetLocal("isteam").isteam;
 local ammocount = Variables.ammocount;
 local equipped = Variables.equipped;
 local currentspread = GetLocal("currentspread").currentspread;
@@ -195,7 +182,7 @@ local function GetClosestPlayer(novisible, maxdistance)
 
     for i,v in Pairs(GetChildren(GPlayers)) do
         if v ~= LocalPlayer then
-            if Flags.TeamCheck and v.TeamColor == LocalPlayer.TeamColor then 
+            if IsTeam(LocalPlayer, v.Character) then 
                 continue;
             end;
 
@@ -344,9 +331,6 @@ end;
 do 
     local LegitTab = Window:Tab("Legit");
 
-    local Options = LegitTab:Section("Options");
-    Options:Toggle("Team Check", false, function(value) Flags.TeamCheck = value; end);
-
     local RageBot, RageToggle = LegitTab:Section("Rage");
     RageToggle = RageBot:Toggle("Enabled", false, function(value) Flags.RageBot = value; end);
     RageBot:Toggle("Visible Check", false, function(value) Flags.RageVisible = value; end);
@@ -372,6 +356,7 @@ do
     Aimbot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.AimbotMaxDistance = value; end);
 
     local SilentAim, SilentToggle = LegitTab:Section("Silent Aim");
+    SilentAim:Toggle("Team Check", false, function(value) Flags.TeamCheck = value; end);
     SilentToggle = SilentAim:Toggle("Enabled", false, function(value) Flags.SilentAim = value; end);
     SilentAim:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.SilentAimTarget = selected; end);
     SilentAim:Keybind("Toggle Key", nil, function() end, function() 
@@ -393,6 +378,19 @@ do
     Weapon:Toggle("No Recoil", false, function(value) Flags.NoRecoil = value; end);
     Weapon:Toggle("No Spread", false, function(value) Flags.NoSpread = value; end);
     Weapon:Toggle("Rainbow Weapon", false, function(value) Flags.WepRainbow = value; end);
+
+    local RacistMode = LegitTab:Section("Racist Mode");
+    RacistMode:Button("Become US cop", function() 
+        for i,v in game.Players do
+            if FindFirstChild(v.Character, "Head") then
+                local HeadColor = v.Character.Head.Color;
+                if HeadColor == BrickColor.new("Brown") or HeadColor == BrickColor.new("Black") then
+                    Camera.CFrame = CFrame(Camera.CFrame.Position, v.Character.Head.Position);
+                    Weapon.firebullet();
+                end;
+            end;
+        end;
+    end);
 
     Flags.AimbotVisible = true;
     Flags.TriggerBotDelay = 0;
@@ -565,7 +563,7 @@ end;
 BackupNamecall = hookmetamethod(game, "__namecall", function(self, ...) 
     local method = getnamecallmethod();
 
-    if method == "FindPartOnRayWithIgnoreList" and Flags.SilentAim and Gun.Value then
+    if method == "FindPartOnRayWithWhitelist" and Flags.SilentAim and Gun.Value then
         local args = {...};
         local MouseVector = Vector2(Mouse.X, Mouse.Y);
         local Closest = GetClosestPlayerFromVector2(MouseVector);
@@ -639,7 +637,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
                 end;
 
                 -- I hate this CODE
-                if Player.TeamColor == LocalPlayer.TeamColor then
+                if IsTeam(LocalPlayer, Character) then
                     Color = Flags.ESPTeamColor;
                     Text.Visible = Flags.ShowTeam;
                     Rect.Visible = Flags.ShowTeam;
@@ -670,7 +668,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
             if Distance then
                 v.Line.To.PointVec2 = LineOffset;
 
-                if Player.TeamColor == LocalPlayer.TeamColor then
+                if IsTeam(LocalPlayer, Character) then
                     Color = Flags.ESPTeamColor;
                     v.Line.Visible = Flags.ShowTeam;
                 else
@@ -702,11 +700,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
             if Result and FindFirstChild(GPlayers, Result.Instance.Parent.Name) then
                 local Player = FindFirstChild(GPlayers, Result.Instance.Parent.Name);
                 -- Cannot return due to it not reaching other FLAGS!
-                if Flags.TeamCheck then
-                    if Player.TeamColor ~= LocalPlayer.TeamColor then
-                        Delay(Flags.TriggerBotDelay, Weapon.firebullet);
-                    end;
-                else
+                if not IsTeam(LocalPlayer, Player.Character) then
                     Delay(Flags.TriggerBotDelay, Weapon.firebullet);
                 end;
             end;
