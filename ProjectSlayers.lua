@@ -166,6 +166,20 @@ local m = UILibrary:CreateWindow("Fate Hub", "Project Slayers", Color3.fromRGB(1
 
 local main = m:Tab("Main");
 
+local farming = main:Section("Farming");
+
+local mobs = Workspace:FindFirstChild("Mobs");
+local Bosses = mobs:FindFirstChild("Bosses");
+local bosses = {};
+
+for i, boss in pairs(Bosses:GetChildren())
+
+farming:Slider("Select Boss");
+
+Bosses.ChildAdded:Connect(function(boss)
+
+end)
+
 local shop = main:Section("Server Hop");
 shop:Button("Smallest Server", function()
     serverhop("Asc");
@@ -173,6 +187,8 @@ end);
 shop:Button("Other Server", function()
     serverhop("Desc");
 end);
+
+
 
 
 local teleports = m:Tab("Teleports");
