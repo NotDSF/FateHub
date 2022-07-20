@@ -360,7 +360,7 @@ local function UiElements(Section, SectionTable, Ret)
         return Ret;
     end
 
-    local function newKeybind(withToggle, parent, Name, DefaultKey, setCallback)
+    local function newKeybind(withToggle, parent, Name, DefaultKey, setCallback, onInput)
         local Keybind = Instance_new('TextButton')
         local Title = Instance_new('TextLabel')
         local CurrentKey = Instance_new('TextLabel')
@@ -395,9 +395,13 @@ local function UiElements(Section, SectionTable, Ret)
         CurrentKey.Parent = withToggle and parent or Keybind
 
         local Ret = {Type = 'Keybind', KeyTrack = DefaultKey, KeyStr = tostring(DefaultKey)}
-        local KeyTrack = DefaultKey
         local MouseInputs = {Enum.UserInputType.MouseButton1, Enum.UserInputType.MouseButton2, Enum.UserInputType.MouseButton3}
 
+        UserInputService.InputBegan:Connect(function(input, gp)
+            if input.KeyCode == Ret.KeyTrack and not gp then 
+                onInput()
+            end
+        end)
 
         CurrentKey.InputBegan:Connect(function(key)
             if (key.UserInputType ~= Enum.UserInputType.MouseButton1) then return; end
@@ -406,17 +410,19 @@ local function UiElements(Section, SectionTable, Ret)
             local InputBegan = nil
             InputBegan = UserInputService.InputBegan:Connect(function(input, gp)
                 if input.UserInputType == Enum.UserInputType.Keyboard and not gp then
-                    Ret.KeyTrack = input.KeyCode
                     Ret.KeyStr = tostring(input.KeyCode)
                     setCallback(input.KeyCode)
                     CurrentKey.Text = string.format('[%s]', string.split(tostring(input.KeyCode), '.')[3])
                     InputBegan:Disconnect()
+                    task.wait()
+                    Ret.KeyTrack = input.KeyCode
                 elseif table.find(MouseInputs, input.UserInputType) and not gp then
-                    Ret.KeyTrack = input.UserInputType
                     Ret.KeyStr = tostring(input.UserInputType)
                     setCallback(input.UserInputType)
                     CurrentKey.Text = string.format('[%s]', string.split(tostring(input.UserInputType), '.')[3])
                     InputBegan:Disconnect()
+                    task.wait()
+                    Ret.KeyTrack = input.UserInputType
                 end
             end)
         end)
@@ -534,8 +540,8 @@ local function UiElements(Section, SectionTable, Ret)
             return newColorPicker(true, ToggleMain, nil, default, callback);
         end
 
-        function Ret:Keybind(default, callback)
-            return newKeybind(true, ToggleMain, nil, default, callback);
+        function Ret:Keybind(default, callback, onInput)
+            return newKeybind(true, ToggleMain, nil, default, callback, onInput);
         end
 
         ToggleMain.MouseEnter:Connect(function()
@@ -551,7 +557,7 @@ local function UiElements(Section, SectionTable, Ret)
 
         return Ret;
     end
-    function Ret:Dropdown(Name, Default, List, Callback)
+    function Ret:Dropdown(Name, Default, List, Callback, excludeConfig)
         local DropdownFrame = Instance_new('Frame')
         local Drop = Instance_new('ScrollingFrame')
         local Title = Instance_new('TextLabel')
@@ -593,7 +599,7 @@ local function UiElements(Section, SectionTable, Ret)
         Drop.Visible = false
         Drop.Parent = DropdownFrame
 
-        local Ret = {Type = 'Dropdown', Selected = Default}
+        local Ret = {Type = 'Dropdown', Selected = Default, Exclude = excludeConfig}
         local InstancedButtons = {}
         local DropToggle = false
 
@@ -864,8 +870,8 @@ local function UiElements(Section, SectionTable, Ret)
     function Ret:Colorpicker(Name, Def, Callback)
         return newColorPicker(false, Section, Name, Def, Callback);
     end
-    function Ret:Keybind(Name, DefaultKey, setCallback)
-        return newKeybind(false, Section, Name, DefaultKey, setCallback);
+    function Ret:Keybind(Name, DefaultKey, setCallback, onInput)
+        return newKeybind(false, Section, Name, DefaultKey, setCallback, onInput);
     end
     function Ret:UserInput(Name, Default, Callback)
         local Main = Instance_new('Frame')
@@ -1262,11 +1268,11 @@ function UiLib:CreateWindow(Name, Game, ColorScheme)
                 for i,v in pairs(d) do
                     local Element = Section[i]
                     if (not Element) then continue; end
-                    if v.Type == 'Toggle' then print(i, 'set', Element.Toggle) v:UpdateToggle(Element.Toggle)
-                    elseif v.Type == 'Dropdown' then print(i, 'set', Element.Selected)v:UpdateSelected(Element.Selected)
+                    if v.Type == 'Toggle' then v:UpdateToggle(Element.Toggle)
+                    elseif v.Type == 'Dropdown' and not v.Exclude then v:UpdateSelected(Element.Selected)
                     elseif v.Type == 'Slider' then v:UpdateValue(Element.SlideValue)
                     elseif v.Type == 'Colorpicker' then local ColorTable = Element.ColorTable; v:UpdateColor(Color3.new(ColorTable.R, ColorTable.G, ColorTable.B))
-                    elseif v.Type == 'Keybind' then local KeySplit = string.split(Element.KeyStr, '.'); v:UpdateBind(Enum[KeySplit[2]][KeySplit[3]])
+                    elseif v.Type == 'Keybind' and Element.KeyStr ~= 'nil' then local KeySplit = string.split(Element.KeyStr, '.'); v:UpdateBind(Enum[KeySplit[2]][KeySplit[3]])
                     elseif v.Type == 'UserInput' then v:UpdateInput(Element.CurrentInput)
                     end
                 end

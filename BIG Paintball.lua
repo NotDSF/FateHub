@@ -5,7 +5,7 @@ ToastType = ToastType or {};
 
 if not isfolder("FatesHub") then makefolder("FatesHub") end;
 if not isfolder("FatesHub/configs") then makefolder("FatesHub/configs") end;
-if not isfolder("FatesHub/configs/Arsenal") then makefolder("FatesHub/configs/Arsenal") end;
+if not isfolder("FatesHub/configs/BigPaintball") then makefolder("FatesHub/configs/BigPaintball") end;
 
 type Toggle = { UpdateToggle: (self: Toggle, toset: boolean) -> nil, UpdateTitle: (self: Toggle, name: string) -> nil }
 type Dropdown = { UpdateList: (self: Dropdown, list: {}) -> nil, UpdateTitle: (self: Dropdown, name: string) -> nil }
@@ -60,7 +60,7 @@ end;
 
 local TNow = tick();
 local Lib: Library = Import("UILibrary.lua");
-local Window = Lib:CreateWindow("Fate Hub", "Arsenal", Color3.fromRGB(255, 50, 150));
+local Window = Lib:CreateWindow("Fate Hub", "Big Paintball", Color3.fromRGB(255, 50, 150));
 Window:SetKeybindClose(Enum.KeyCode.F5);
 
 local Pairs = pairs;
@@ -68,20 +68,16 @@ local ToastNotif = syn.toast_notification;
 local Game = game;
 local GPlayers = Game.Players;
 local LocalPlayer = GPlayers.LocalPlayer;
-local UserInputService = Game.UserInputService;
 local Workspace = Game.Workspace;
 local Camera = Workspace.CurrentCamera;
 local WorldToViewportPoint = Camera.WorldToViewportPoint;
-local IsMouseButtonPressed = UserInputService.IsMouseButtonPressed;
 local GetChildren = Game.GetChildren;
 local FindFirstChild = Game.FindFirstChild;
 local IsDescendantOf = Game.IsDescendantOf;
-local IsA = Game.IsA;
 local Raycast = Workspace.Raycast;
 local RaycastParams = RaycastParams.new();
 local CFrame = CFrame.new;
 local sort = table.sort;
-local Delay = task.delay;
 local Tick = tick;
 local fromHSV = Color3.fromHSV;
 local Color3 = Color3.new;
@@ -92,29 +88,16 @@ local RectDynamic = RectDynamic.new;
 local TextDynamic = TextDynamic.new;
 local format = string.format;
 local floor = math.floor;
-local MouseButton2 = Enum.UserInputType.MouseButton2;
 local Mouse = LocalPlayer:GetMouse();
-local Checkcaller = checkcaller;
-local Hookmetamethod = hookmetamethod;
-local Hookfunction = hookfunction;
 local getnamecallmethod = getnamecallmethod;
 local LineDynamic = LineDynamic.new;
 local Point2D = Point2D.new;
-local filtergc = filtergc;
 local Ray = Ray.new;
 local unpack = unpack;
 local LineOffset = Vector2(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y);
 
-local Flags, ESPObjects, ESPLines, Spoofed = {}, {}, {}, {};
-local BackupIndex, BackupNewIndex, BackupNamecall;
-
-local function GetLocal(index) 
-    return filtergc("table", { Keys = { index } }, true);
-end;
-
-local function GetFunction(name) 
-    return filtergc("function", { Name = name }, true);
-end;
+local Flags, ESPObjects, ESPLines = {}, {}, {};
+local BackupNamecall;
 
 local function SynapseNotification(Content, Type) 
     if not ToastNotif then return rconsoleprint(Content .. "\n"); end;
@@ -126,46 +109,6 @@ local function SynapseNotification(Content, Type)
     });
 end;
 
-SynapseNotification("ALERT: You are running a beta version of Fates Hub.\nPlease report any bugs to the discord server.\nIf you aren't you should use an alt.");
-
-local Variables = GetLocal("primarystored");
-local Crouch = GetLocal("ctrlcrouch");
-local Weapon = GetLocal("firebullet");
-local ModCheck = GetLocal("isMod");
-local RotCamera = GetFunction("RotCamera");
-local GunMode = GetLocal("mode");
-local IsTeam = GetLocal("isteam").isteam;
-local ammocount = Variables.ammocount;
-local equipped = Variables.equipped;
-local currentspread = GetLocal("currentspread").currentspread;
-local Gun = GetLocal("gun").gun;
-
-BackupIndex = Hookmetamethod(Game, "__index", newcclosure(function(self, idx) 
-    if idx == "WalkSpeed" then
-        return 16;
-    elseif idx == "JumpPower" then
-        return 50;
-    elseif Flags.InfiniteAmmo and self == ammocount and idx == "Value" then
-        return 100;
-    elseif Flags.NoSpread and self == currentspread and idx == "Value" then
-        return 0;
-    end;
-    return BackupIndex(self, idx);
-end));
-
-BackupNewIndex = Hookmetamethod(Game, "__newindex", newcclosure(function(self, idx, val) 
-    if not Checkcaller() and Spoofed[idx] then
-        val = val + Spoofed[idx];
-    end;
-    return BackupNewIndex(self, idx, val);
-end));
-
-local BackupRot;
-BackupRot = Hookfunction(RotCamera, function(...)
-    if Flags.NoRecoil then return end;
-    return BackupRot(...);
-end);
-
 local FOV = Circle.new()
 FOV.Visible = false;
 FOV.Thickness = 1;
@@ -174,76 +117,24 @@ FOV.Position = Vector2(Mouse.X, Mouse.Y);
 FOV.Color = fromHSV(0, 0.0, 1);
 FOV.NumSides = 0;
 
-local function GetClosestPlayer(novisible, maxdistance) 
-    if not LocalPlayer.Character or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
-
-    local LPos = LocalPlayer.Character.HumanoidRootPart.Position;
-    local Players = {};
-
-    for i,v in Pairs(GetChildren(GPlayers)) do
-        if v ~= LocalPlayer then
-            if IsTeam(LocalPlayer, v.Character) then 
-                continue;
-            end;
-
-            local Character = v.Character;
-            local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
-
-            if HumanoidRootPart then
-                local Between = (HumanoidRootPart.Position - LPos).magnitude;
-
-                if maxdistance and Between > maxdistance then continue; end;
-
-                if novisible then -- doesnt care about visibilty
-                    Players[#Players+1] = {Between, v};
-                    continue;
-                end;
-
-                local _, Visible = WorldToViewportPoint(Camera, HumanoidRootPart.Position);
-                if Visible then
-                    Players[#Players+1] = {Between, v};
-                end;
-            end;
-        end;
+local function IsTeam(player) 
+    if game.Workspace.__VARIABLES.RoundType.Value == "FFA" then
+        return false;
     end;
-
-    sort(Players, function(x,y) return x[1] < y[1] end);
-
-    return Players[1] and Players[1][2];
-end;
-
-local function GetClosestPlayerFromVector2(pos) 
-    if not LocalPlayer.Character or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
-
-    local Players = {};
-
-    for i,v in Pairs(GetChildren(GPlayers)) do
-        if v ~= LocalPlayer then
-            if Flags.TeamCheck and v.TeamColor == LocalPlayer.TeamColor then 
-                continue;
-            end;
-
-            local Character = v.Character;
-            local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
-
-            if HumanoidRootPart then
-                local Vector, Visible = WorldToViewportPoint(Camera, HumanoidRootPart.Position);
-                local Between = (Vector2(Vector.X, Vector.Y) - pos).magnitude;
-                if Visible and Between <= FOV.Radius then
-                    Players[#Players+1] = {Between, v};
-                end;
-            end;
-        end;
-    end;
-
-    sort(Players, function(x,y) return x[1] < y[1] end);
-
-    return Players[1] and Players[1][2];
+    return LocalPlayer.Team == player.Team;
 end;
 
 local function AddBox(player) 
     local Character = player.Character;
-    local HumanoidRootPart = Character.HumanoidRootPart;
+    local HumanoidRootPart = FindFirstChild(Character, "HumanoidRootPart");
+    
+    Character.ChildAdded:Connect(function(child) 
+        if child.Name == "HumanoidRootPart" and not ESPObjects[Character] then
+            AddBox(player);
+        end;
+    end);
+
+    if not HumanoidRootPart then return end;
 
     local Top = PointInstance(HumanoidRootPart, CFrame(Vector3(2.2, 3, 0)));
     local Bottom = PointInstance(HumanoidRootPart, CFrame(Vector3(-2.2, -3, 0)));
@@ -295,7 +186,15 @@ end;
 
 local function AddLine(player) 
     local Character = player.Character;
-    local Head = Character.Head;
+    local Head = FindFirstChild(Character, "Head");
+
+    Character.ChildAdded:Connect(function(child) 
+        if child.Name == "Head" and not ESPLines[Character] then
+            AddLine(player);
+        end;
+    end);
+
+    if not Head then return end;
 
     local To = Point2D();
     To.PointVec2 = LineOffset;
@@ -327,36 +226,94 @@ local function AddLine(player)
     ESPLines[Character] = Object;
 end;
 
--- Legit
-do 
-    local LegitTab = Window:Tab("Legit");
+local function GetClosestPlayer(novisible, maxdistance) 
+    if not LocalPlayer.Character or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
 
-    local RageBot, RageToggle = LegitTab:Section("Rage");
-    RageToggle = RageBot:Toggle("Enabled", false, function(value) Flags.RageBot = value; end);
-    RageBot:Toggle("Visible Check", false, function(value) Flags.RageVisible = value; end);
-    RageBot:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.RageTarget = selected; end);
-    RageBot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.RageBotMaxDistane = value; end);
-    RageBot:Keybind("Toggle Key", nil, function() end, function() 
-        SynapseNotification(format("%s Rage", not Flags.RageBot and "Enabled" or "Disabled"), ToastType.Warning);
-        RageToggle:UpdateToggle(not Flags.RageBot);
-    end);
+    local LPos = LocalPlayer.Character.HumanoidRootPart.Position;
+    local Players = {};
 
-    local TriggerBot, TriggerToggle = LegitTab:Section("Trigger Bot");
-    TriggerToggle = TriggerBot:Toggle("Enabled", false, function(value) Flags.TriggerBot = value; end);    
-    TriggerBot:Slider("Delay", 0, 10, 0, function(value) Flags.TriggerBotDelay = value end);
-    TriggerBot:Keybind("Toggle Key", nil, function() end, function() 
-        SynapseNotification(format("%s Trigger Bot", not Flags.TriggerBot and "Enabled" or "Disabled"), ToastType.Warning);
-        TriggerToggle:UpdateToggle(not Flags.TriggerBot);
-    end);
+    for i,v in Pairs(GetChildren(GPlayers)) do
+        if v ~= LocalPlayer then
+            if IsTeam(v) then 
+                continue;
+            end;
 
-    local Aimbot = LegitTab:Section("Aimbot");
-    Aimbot:Toggle("Enabled", false, function(value) Flags.Aimbot = value end);
-    Aimbot:Toggle("Visible Check", true, function(value) Flags.AimbotVisible = value; end);
-    Aimbot:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.AimbotTarget = selected; end);
-    Aimbot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.AimbotMaxDistance = value; end);
+            local Character = v.Character;
+            local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
 
-    local SilentAim, SilentToggle = LegitTab:Section("Silent Aim");
-    SilentAim:Toggle("Team Check", false, function(value) Flags.TeamCheck = value; end);
+            if HumanoidRootPart then
+                local Between = (HumanoidRootPart.Position - LPos).magnitude;
+
+                if maxdistance and Between > maxdistance then continue; end;
+
+                if novisible then -- doesnt care about visibilty
+                    Players[#Players+1] = {Between, v};
+                    continue;
+                end;
+
+                local _, Visible = WorldToViewportPoint(Camera, HumanoidRootPart.Position);
+                if Visible then
+                    Players[#Players+1] = {Between, v};
+                end;
+            end;
+        end;
+    end;
+
+    sort(Players, function(x,y) return x[1] < y[1] end);
+
+    return Players[1] and Players[1][2];
+end;
+
+local function GetClosestPlayerFromVector2(pos) 
+    if not LocalPlayer.Character or not FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then return end;
+
+    local Players = {};
+
+    for i,v in Pairs(GetChildren(GPlayers)) do
+        if v ~= LocalPlayer then
+            if IsTeam(v) then 
+                continue;
+            end;
+
+            local Character = v.Character;
+            local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
+
+            if HumanoidRootPart then
+                local Vector, Visible = WorldToViewportPoint(Camera, HumanoidRootPart.Position);
+                local Between = (Vector2(Vector.X, Vector.Y) - pos).magnitude;
+
+                if Visible and Between <= FOV.Radius then
+                    Players[#Players+1] = {Between, v};
+                end;
+            end;
+        end;
+    end;
+
+    sort(Players, function(x,y) return x[1] < y[1] end);
+
+    return Players[1] and Players[1][2];
+end;
+
+SynapseNotification("ALERT: You are running a beta version of Fates Hub.\nPlease report any bugs to the discord server.\nIf you aren't you should use an alt.");
+
+local EntityHandler = require(game:GetService("ReplicatedStorage").Framework.Modules["6 | GunCmds"]);
+
+-- Main
+do
+    local Main = Window:Tab("Main");
+
+    local Weapon = Main:Section("Weapon");
+    Weapon:Toggle("Enable Cheats", false, function(value) Flags.EnableWepCheats = value; end);
+    Weapon:Toggle("Automatic", true, function(value) Flags.AutomaticWeapon = value; end);
+    Weapon:Slider("Fire Rate", 0.1, 10, 0.1, function(value) Flags.FireRate = value; end);
+    Weapon:Slider("Bullet Velocity", 1, 9999, 700, function(value) Flags.Velocity = value; end);
+
+    Flags.EnableWepCheats = false;
+    Flags.AutomaticWeapon = true;
+    Flags.FireRate = 0.1;
+    Flags.Velocity = 700;
+
+    local SilentAim, SilentToggle = Main:Section("Silent Aim");
     SilentToggle = SilentAim:Toggle("Enabled", false, function(value) Flags.SilentAim = value; end);
     SilentAim:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.SilentAimTarget = selected; end);
     SilentAim:Keybind("Toggle Key", nil, function() end, function() 
@@ -370,56 +327,18 @@ do
     SilentAim:Slider("Circle Sides", 0, 100, 0, function(value) FOV.NumSides = value; end);
     FOVCircle:Colorpicker(Color3(0.313725, 0.988235, 0), function(value) FOV.Color = value; end);
 
-    local Weapon = LegitTab:Section("Weapon");
-    Weapon:Toggle("Infinite Ammo", false, function(value) Flags.InfiniteAmmo = value; end);
-    Weapon:Toggle("Automatic", false, function(value) Flags.Automatic = value; end);
-    Weapon:Toggle("Rapid Fire", false, function(value) Flags.RapidFire = value; end);
-    Weapon:Toggle("Rapid Reload", false, function(value) Flags.RapidReload = value; end);
-    Weapon:Toggle("No Recoil", false, function(value) Flags.NoRecoil = value; end);
-    Weapon:Toggle("No Spread", false, function(value) Flags.NoSpread = value; end);
-    Weapon:Toggle("Rainbow Weapon", false, function(value) Flags.WepRainbow = value; end);
-
-    local RacistMode = LegitTab:Section("Racist Mode");
-    RacistMode:Button("Become US cop", function() 
-        for i,v in game.Players do
-            if FindFirstChild(v.Character, "Head") then
-                local HeadColor = v.Character.Head.Color;
-                if HeadColor == BrickColor.new("Brown") or HeadColor == BrickColor.new("Black") then
-                    Camera.CFrame = CFrame(Camera.CFrame.Position, v.Character.Head.Position);
-                    Weapon.firebullet();
-                end;
-            end;
-        end;
+    local RageBot, RageToggle = Main:Section("Rage");
+    RageToggle = RageBot:Toggle("Enabled", false, function(value) Flags.RageBot = value; end);
+    RageBot:Toggle("Visible Check", false, function(value) Flags.RageVisible = value; end);
+    RageBot:Dropdown("Target", "Head", {"Head", "HumanoidRootPart"}, function(selected) Flags.RageTarget = selected; end);
+    RageBot:Slider("Max Distance", 1, 9999, 9999, function(value) Flags.RageBotMaxDistane = value; end);
+    RageBot:Keybind("Toggle Key", nil, function() end, function() 
+        SynapseNotification(format("%s Rage", not Flags.RageBot and "Enabled" or "Disabled"), ToastType.Warning);
+        RageToggle:UpdateToggle(not Flags.RageBot);
     end);
 
-    Flags.AimbotVisible = true;
-    Flags.TriggerBotDelay = 0;
-    Flags.AimbotMaxDistance = 9999;
     Flags.RageBotMaxDistane = 9999;
     Flags.SilentAimTarget = "Head";
-end;
-
--- Player
-do 
-    local Player = Window:Tab("Player");
-    local Main = Player:Section("Main");
-
-    Main:Toggle("Infinite Jump", false, function(value) Flags.InfJump = value; end);
-    Main:Toggle("Noclip", false, function(value) Flags.NoClip = value; end);
-
-    Main:Slider("WalkSpeed", 1, 200, LocalPlayer.Character.Humanoid.WalkSpeed, function(value) 
-        Spoofed.WalkSpeed = value;
-    end);
-
-    Main:Slider("JumpHeight", 1, 200, floor(LocalPlayer.Character.Humanoid.JumpHeight), function(value) 
-        Spoofed.JumpHeight = value;
-    end);
-
-    local AntiAim = Player:Section("Anti Aim");
-    AntiAim:Toggle("Auto Crouch", false, function(value) Flags.AutoCrouch = value; end);
-    AntiAim:Slider("Delay", 0, 10, 0, function(value) Flags.AntiAimDelay = value; end);
-
-    Flags.AntiAimDelay = 0;
 end;
 
 -- Visual
@@ -496,75 +415,11 @@ do
     Flags.TextOffset = CFrame(Vector3(0, 3.8, 0));
 end;
 
--- Misc
-do 
-    local Misc = Window:Tab("Misc");
-    local Main = Misc:Section("Main");
-    
-    Main:Button("Rejoin", function() 
-        Game.TeleportService:TeleportToPlaceInstance(Game.PlaceId, Game.JobId);
-    end);
-
-    Main:Toggle("Staff Check", true, function(value) 
-        if value then
-            for i,v in Pairs(GetChildren(GPlayers)) do
-                if ModCheck.isMod(v) then
-                    SynapseNotification("A moderator is in your game!", ToastType.Warning);
-                end;
-            end;
-        end;
-        Flags.ModCheck = value;
-    end);
-    
-    local Options = Misc:Section("Options");
-    Options:Keybind("UI Open", Enum.KeyCode.F5, function(Keybind) Window:SetKeybindClose(Keybind); end, function() end);
-    Options:Button("Reset UI", function() 
-        Window:LoadConfig(syn.crypt.decode(syn.crypt.base64.decode(readfile("FatesHub/configs/Arsenal/default.bin")), "78VGc*6bCyjoC$zn0Z#3brOjcR^xRlUl"));
-    end);
-
-    Flags.ModCheck = true;
-
-    local function GrabConfigs() 
-        local Configs = {};
-        for i,v in Pairs(listfiles("FatesHub/configs/Arsenal")) do
-            local name = v:split("\\")[4];
-            if name:split(".")[2] == "json" then
-                Configs[i] = name;
-            end;
-        end;
-        return Configs;
-    end;
-
-    local Config, CurrentName = Misc:Section("Configs"), "main.json";
-    
-    Config:UserInput("Config Name", "main.json", function(value) 
-        CurrentName = value;
-    end);
-
-    Config:Button("Save Config", function() 
-        writefile(format("FatesHub/configs/Arsenal/%s", CurrentName), Window:GenerateConfig());
-        SynapseNotification(format("Saved config to '%s'", CurrentName));
-    end);
-
-    local ConfigDropdown = Config:Dropdown("Configs", "main.json", GrabConfigs(), function(value) 
-        Window:LoadConfig(readfile(format("FatesHub/configs/Arsenal/%s", value)));
-        SynapseNotification(format("Loaded config '%s'", value));
-    end, true);
-
-    Config:Button("Refresh Configs", function()
-        ConfigDropdown:UpdateList(GrabConfigs())
-    end);
-end;
-
-if not isfile("FatesHub/configs/Arsenal/default.bin") then
-    writefile("FatesHub/configs/Arsenal/default.bin", syn.crypt.base64.encode(syn.crypt.encrypt(Window:GenerateConfig(), "78VGc*6bCyjoC$zn0Z#3brOjcR^xRlUl")));
-end;
-
 BackupNamecall = hookmetamethod(game, "__namecall", function(self, ...) 
     local method = getnamecallmethod();
+    local args = {...};
 
-    if method == "FindPartOnRayWithWhitelist" and Flags.SilentAim and Gun.Value then
-        local args = {...};
+    if method == "FindPartOnRayWithWhitelist" and Flags.SilentAim then
         local MouseVector = Vector2(Mouse.X, Mouse.Y);
         local Closest = GetClosestPlayerFromVector2(MouseVector);
         local Head = LocalPlayer.Character.Head.Position;
@@ -574,44 +429,14 @@ BackupNamecall = hookmetamethod(game, "__namecall", function(self, ...)
         local Target = Closest.Character[Flags.SilentAimTarget];
         local Result = Raycast(Workspace, Head, Target.Position - Head);
         if Result and not IsDescendantOf(Result.Instance, Closest.Character) or not Result then return BackupNamecall(self, ...) end;
-        
+
         args[1] = Ray(args[1].Origin, Target.Position - args[1].Origin);
-        return BackupNamecall(self, unpack(args));
     end;
 
-    return BackupNamecall(self, ...);
+    return BackupNamecall(self, unpack(args));
 end);
 
 Mouse.Move.Connect(Mouse.Move, function() FOV.Position = Vector2(Mouse.X, Mouse.Y); end);
-
-GPlayers.PlayerAdded.Connect(GPlayers.PlayerAdded, function(player) 
-    if Flags.ModCheck and ModCheck.isMod(player) then
-        SynapseNotification("A moderator is in your game!", ToastType.Warning);
-    end;
-
-    if Flags.ESP then
-        AddBox(player);
-    end;
-
-    if Flags.Tracers then
-        AddLine(player);
-    end;
-end);
-
-local Space = Enum.KeyCode.Space;
-UserInputService.InputBegan:Connect(function(input) 
-    if input.KeyCode == Space and Flags.InfJump and equipped.Value ~= "none" then
-        LocalPlayer.Character.Humanoid:ChangeState(3);
-    end;
-end);
-
-LocalPlayer.Character.UpperTorso.Touched:Connect(function(part) 
-    if not Flags.NoClip or not part.CanCollide then return end;
-
-    part.CanCollide = false;
-    wait(1);
-    part.CanCollide = true;
-end);
 
 Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
     if Flags.ESP then
@@ -637,7 +462,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
                 end;
 
                 -- I hate this CODE
-                if IsTeam(LocalPlayer, Character) then
+                if IsTeam(Player) then
                     Color = Flags.ESPTeamColor;
                     Text.Visible = Flags.ShowTeam;
                     Rect.Visible = Flags.ShowTeam;
@@ -649,8 +474,8 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
                     HealthBar.Visible = Flags.ShowEnemy;
                 end;
                 
-                v.HealthBarTop.Offset = CFrame(Vector3(-2.6, math.clamp(3 + ((-6 / 100) * (100 - Player.NRPBS.Health.Value)), 0, 3), 0));
-                Text.Text = format("%s | %d | [%d | 100]", Player.Name, Distance, Player.NRPBS.Health.Value);
+                v.HealthBarTop.Offset = CFrame(Vector3(-2.6, math.clamp(3 + ((-6 / 100) * (100 - Character.Humanoid.Health)), 0, 3), 0));
+                Text.Text = format("%s | %d | [%d | 100]", Player.Name, Distance, Character.Humanoid.Health);
                 Text.Color = Color;
                 Rect.Color = Color;
             end;
@@ -668,7 +493,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
             if Distance then
                 v.Line.To.PointVec2 = LineOffset;
 
-                if IsTeam(LocalPlayer, Character) then
+                if IsTeam(Player) then
                     Color = Flags.ESPTeamColor;
                     v.Line.Visible = Flags.ShowTeam;
                 else
@@ -681,83 +506,34 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
         end;
     end;
 
-    if equipped.Value == "none" then return end;
+    if Flags.EnableWepCheats then
+        local Gun = select(2, EntityHandler.GetEquipped(LocalPlayer));
 
-    if Flags.Aimbot and IsMouseButtonPressed(UserInputService, MouseButton2) then
-        local Closest = GetClosestPlayer(not Flags.AimbotVisible, Flags.AimbotMaxDistance);
-        if Closest then
-            local Target = Flags.AimbotTarget or "Head";
-            Camera.CFrame = CFrame(Camera.CFrame.Position, Closest.Character[Target].Position);
-        end;
+        Gun.automatic = Flags.AutomaticWeapon;
+        Gun.shotrate = Flags.FireRate;
+        Gun.velocity = Flags.Velocity;
     end;
 
-    if Flags.TriggerBot then
-        if Mouse.Target and Mouse.Target then
-            local Head = LocalPlayer.Character.Head.Position;
-            RaycastParams.FilterDescendantsInstances = { LocalPlayer.Character, Camera, Workspace.Map.Ignore };
-            
-            local Result = Raycast(Workspace, Head, Mouse.Target.Position - Head, RaycastParams);
-            if Result and FindFirstChild(GPlayers, Result.Instance.Parent.Name) then
-                local Player = FindFirstChild(GPlayers, Result.Instance.Parent.Name);
-                -- Cannot return due to it not reaching other FLAGS!
-                if not IsTeam(LocalPlayer, Player.Character) then
-                    Delay(Flags.TriggerBotDelay, Weapon.firebullet);
-                end;
-            end;
-        end;
-    end;
+    if not FindFirstChild(LocalPlayer, "__SPAWNED") then return end;
 
     if Flags.RageBot and FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") then
         local Closest = GetClosestPlayer(not Flags.RageVisible, Flags.RageBotMaxDistane);
 
         if Closest then
             local Head = LocalPlayer.Character.Head.Position;
-            RaycastParams.FilterDescendantsInstances = { LocalPlayer.Character, Camera, Workspace.Map.Ignore };
+            RaycastParams.FilterDescendantsInstances = { LocalPlayer.Character, Camera }
     
             local Target = FindFirstChild(Closest.Character, Flags.RageTarget or "Head");
             if Target then
                 local Result = Raycast(Workspace, Head, Target.Position - Head, RaycastParams);
                 if Result and IsDescendantOf(Result.Instance, Closest.Character) then
                     Camera.CFrame = CFrame(Camera.CFrame.Position, Target.Position);
-                    Weapon.firebullet();
+                    mouse1click();
                 end;
-            end;
-        end;
-    end;
-
-    if Flags.AutoCrouch then
-        local ctrlcrouch = Crouch.ctrlcrouch; 
-        Delay(Flags.AntiAimDelay, function() 
-            ctrlcrouch.Value = not ctrlcrouch.Value;
-        end);
-    end;
-
-    if Flags.RapidFire and Gun.Value then
-        local FireRate = FindFirstChild(Gun.Value, "FireRate");
-        if FireRate and FireRate.Value ~= .02 then
-            FireRate.Value = .02; -- setting to 0 will make you crash
-        end;
-    end;
-
-    if Flags.RapidReload and Gun.Value then
-        local ReloadTime = FindFirstChild(Gun.Value, "ReloadTime");
-        if ReloadTime and ReloadTime.Value ~= .02 then
-            ReloadTime.Value = .02;
-        end;
-    end;
-
-    if Flags.Automatic and GunMode.mode ~= "automatic" then
-        GunMode.mode = "automatic";
-    end;
-
-    if Flags.WepRainbow and FindFirstChild(Camera, "Arms") then
-        for i,v in Pairs(GetChildren(Camera.Arms)) do
-            if IsA(v, "MeshPart") then
-                v.Color = fromHSV((Tick() / 5) % 1, 1, 1);
             end;
         end;
     end;
 end);
 
-FOV.Visible = true;
 SynapseNotification(format("Loaded in %ss", Tick() - TNow), ToastType.Success);
+FOV.Visible = true;

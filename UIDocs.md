@@ -31,7 +31,7 @@ Toggle:Keybind(<KeyCode> defaultBind, <function callback>)
 
 Dropdown:
 ```lua
-Section:Dropdown(<string name>, <any starting value>, <table list>, <function callback>)
+Section:Dropdown(<string name>, <any starting value>, <table list>, <function callback>, <bool exclude>)
 
 Dropdown:UpdateList(<table list>)
 Dropdown:UpdateTitle(<string name>)
