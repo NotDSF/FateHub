@@ -1,7 +1,3 @@
-if (not flagSet) then
-    setfflag("RenderHighlightPass3", "True");
-    getgenv().flagSet = true
-end
 
 local Visuals = {};
 Visuals.__index = Visuals
@@ -167,15 +163,17 @@ function Visuals:Add(object)
         if (not drawingType) then
             return objectDrawings;
         end
+        local found = {}
         for i, objdrawing in pairs(objectDrawings) do
             local type = typeof(objdrawing)
             if (type == drawingType) then
-                return objdrawing;
+                found[#found + 1] = objdrawing;
             end
             if (type == "table" and drawingType == "Chams") then
                 return objdrawing;
             end
         end
+        return unpack(found);
     end
 
     return DrawEntry;

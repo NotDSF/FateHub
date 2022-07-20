@@ -2,191 +2,230 @@ if (not game:IsLoaded()) then
     game.Loaded:Wait();
 end
 
-local Options = {
-    Perfect = .5,
-    Okay = 4,
-    Great = 2
-}
+for i, v in pairs(_G.Connections or {}) do
+    v:Disconnect();
+end
+_G.Connections = {};
 
-local Option = Options.Perfect
-local HitChance = 100
+local timings = {
+    perfect = .55,
+    okay = 4,
+    great = 2
+};
+
+local timing = timings.perfect
+local hitChance = 100
 
 local UI = loadfile("UILib.lua")();
-local MainWindow = UI:CreateWindow("Fate Hub", "RoBeats", Color3.fromRGB(0, 255, 255));
+local mainWindow = UI:CreateWindow("Fate Hub", "Robeats", Color3.fromRGB(0, 255, 150));
 
-local AutoPlay = MainWindow:Tab("Autoplay");
-local AutoPlayAccuracy = AutoPlay:Section("Accuracy");
+local autoPlay = mainWindow:Tab("AutoPlay");
+local autoPlayAccuracy = autoPlay:Section("Accuracy");
 
-AutoPlayAccuracy:Dropdown("Autoplay Option", "Perfect", {"Perfect", "Great", "Okay"}, function(Callback)
-    Option = Options[Callback]
+autoPlayAccuracy:Dropdown("Autoplay", "Perect", {"Perfect", "Great", "Okay"}, function(callback)
+    timing = timings[string.lower(callback)]
 end);
 
-AutoPlayAccuracy:Slider("Hit Chance", 0, 100, 100, function(Callback)
-    HitChance = Callback
-end, false);
+autoPlayAccuracy:Slider("Hit Chance", 0, 100, 100, function(callback)
+    hitChance = callback
+end);
+
+local infocache = {};
+local trampoline_call = function(func, ...)
+    local funcinfo = infocache[func] or debug.getinfo(func);
+    if (not infocache[func]) then
+        infocache[func] = funcinfo
+    end
+    local funcenv = getfenv(func);
+    local result = {syn.trampoline_call(func, funcenv, {
+        env = funcenv,
+        source = funcinfo.source,
+        name = funcinfo.name,
+        currentline = funcinfo.currentline,
+        numparams = funcinfo.numparams,
+        is_varag = funcinfo.is_vararg
+    }, 2, ...)}
+    if (result[1]) then
+        return unpack(result, 2);
+    end
+end
+
+local networkKeys = {
+    "_ui_manager", "_players", "_characters",
+    "_world_effect_manager", "_effects", "_input",
+    "_sfx_manager", "_object_pool", "_adorn_pool"
+};
+
+local network = filtergc("table", {
+    Keys = networkKeys
+})[1];
+
+local input, input_began, input_ended;
+do
+    local inputBeganConnections = getconnections(game:GetService("UserInputService").InputBegan);
+    for i, v in pairs(inputBeganConnections) do
+        if (v.Function) then
+            local source = getinfo(v.Function).source
+            if (source == "=ReplicatedStorage.Shared.InputUtil") then
+                input = debug.getupvalue(v.Function, 4);
+                input_began, input_ended = rawget(input, "input_began"), rawget(input, "input_ended");
+            end
+        end
+    end
+end
+
+local notes = {
+    a = { isHolding = false; lastPressed = tick() };
+    s = { isHolding = false; lastPressed = tick() };
+    d = { isHolding = false; lastPressed = tick() };
+    f = { isHolding = false; lastPressed = tick() };
+}
 
 local Players = game:GetService("Players");
 local LocalPlayer = Players.LocalPlayer
 
-local Notes = {
-    A = { IsHolding = false; LastPressed = tick() };
-    S = { IsHolding = false; LastPressed = tick() };
-    D = { IsHolding = false; LastPressed = tick() };
-    F = { IsHolding = false; LastPressed = tick() };
-}
-
-local ItemChanged;
-
-local GetCharacter = function()
-    local Character, Parent
-    local WorkspaceChildren = game:GetService("Workspace"):GetChildren();
-    for Index = 1, #WorkspaceChildren do
-        local Child = WorkspaceChildren[Index]
-        local ChildChildren = Child:GetChildren();
-        for Index2, Child2 in pairs(ChildChildren) do
-            local Humanoid = Child2:FindFirstChild("Humanoid");
-            if (Humanoid and Humanoid.DisplayName == LocalPlayer.DisplayName) then
-                Parent = Child
-                Character = Child2
+local getCharacter = function()
+    local character, parent
+    local workspaceChildren = game:GetService("Workspace"):GetChildren();
+    for i = 1, #workspaceChildren do
+        local child = workspaceChildren[i]
+        local childChildren = child:GetChildren();
+        for i2, child2 in pairs(childChildren) do
+            local humanoid = child2:FindFirstChild("Humanoid");
+            if (humanoid and humanoid.DisplayName == LocalPlayer.DisplayName) then
+                parent = child
+                character = child2
                 break;
             end
         end
     end
-    return Character, Parent
+    return character, parent
 end
 
-local GetNotes = function()
-    for Index, Value in pairs(Notes) do
-        Notes[Index].Position = nil
+local getNotes = function()
+    for i, v in pairs(notes) do
+        notes[i].position = nil
     end
 
-    local Character, Parent = GetCharacter();
+    local character, parent = getCharacter();
 
-    local Children = Parent:GetChildren();
-    for Index = 1, #Children do
-        local Child = Children[Index]
-        local ChildChildren = Child:GetChildren();
-        if (#ChildChildren == 9) then
-            for Index2 = 1, #ChildChildren do
-                local ChildofChild = ChildChildren[Index2]
-                if (tostring(ChildofChild.BrickColor) == "Fire Yellow") then
-                    if ((ChildofChild.Position - Character.HumanoidRootPart.Position).Magnitude <= 20) then
-                        if (not Notes.A.Position) then
-                            Notes.A.Position = ChildofChild.Position
-                        elseif (not Notes.S.Position) then
-                            Notes.S.Position = ChildofChild.Position
-                        elseif (not Notes.D.Position) then
-                            Notes.D.Position = ChildofChild.Position
-                        elseif (not Notes.F.Position) then
-                            Notes.F.Position = ChildofChild.Position
-                        else
-                            break;
-                        end
-                    end
+    for i, v in pairs(workspace:GetDescendants()) do
+        if (v:IsA("Part") and v.Name == "Outer") then
+            local mag = (v.Position - character.HumanoidRootPart.Position).Magnitude
+            if (mag <= 20) then
+                if (not notes.a.position) then
+                    notes.a.position = v.Position
+                elseif (not notes.s.position) then
+                    notes.s.position = v.Position
+                elseif (not notes.d.position) then
+                    notes.d.position = v.Position
+                elseif (not notes.f.position) then
+                    notes.f.position = v.Position
+                else
+                    break;
                 end
             end
         end
     end
 end
 
-
 if (not LocalPlayer.Character) then
-    local Character, Parent = GetCharacter();
-    if (not Character) then
+    local character, parent = getCharacter();
+    if (not character) then
         LocalPlayer.CharacterAdded:Wait();
     end
 
-    if (Character and Parent) then
-        GetNotes();
+    if (character and parent) then
+        getNotes();
     end
 end
 
-LocalPlayer.CharacterRemoving:Connect(function()
-    local Character, Parent = GetCharacter();
+local c1 = LocalPlayer.CharacterRemoving:Connect(function()
+    local character, parent = getCharacter();
     repeat
         task.wait(.5);
-    until Character and Parent
-    local Sound = Parent:FindFirstChildOfClass("Sound");
-    Sound:GetPropertyChangedSignal("Volume");
-    GetNotes();
-end)
+        character, parent = getCharacter();
+    until character and parent
+    local sound = parent:FindFirstChildOfClass("Sound");
+    sound:GetPropertyChangedSignal("Volume");
+    getNotes();
+end);
 
-local keypress = function(Key)
-    keypress(Key);
+local keypress = function(key)
+    trampoline_call(input_began, input, key);
 end
-local keyrelease = function(Key)
-    keyrelease(Key);
+local keyrelease = function(key)
+    trampoline_call(input_ended, input, key);
 end
 
-ItemChanged = game.ItemChanged:Connect(function(Item, Prop)
-    local ClassName = Item.ClassName
-    if (string.find(ClassName, "Adornment") and Prop == "CFrame") then
-        local IsSphere = ClassName == "SphereHandleAdornment"
-        local Transparency = Item.Transparency
-        local Position = Item.CFrame.Position
+local changed;
+changed = game.ItemChanged:Connect(function(instance, prop)
+    local className = instance.ClassName
+    if (string.find(className, "Adornment") and prop == "CFrame") then
+        local isSphere = className == "SphereHandleAdornment"
+        local transparency = instance.Transparency
+        local position = instance.CFrame.Position
         local now = tick();
-        local A, D, S, F = Notes.A, Notes.D, Notes.S, Notes.F
+        local a, d, s, f = notes.a, notes.d, notes.s, notes.f
 
-        local PassedHitChance = math.random(1, 100) < HitChance
-        if (not PassedHitChance) then
-            return
-        end
-
-        if ((A.Position - Position).Magnitude <= Option and now - A.LastPressed > .05) then --0x41
-            if (A.IsHolding and Transparency == 0.5) then
-                keyrelease(0x41);
-                A.IsHolding = false
-            elseif (Transparency == 0) then
-                keypress(0x41);
-                if (IsSphere) then
-                    A.IsHolding = true
+        if ((a.position - position).Magnitude <= timing and now - a.lastPressed > .05) then --0x41
+            if (a.isHolding and transparency == 0.5) then
+                keyrelease(Enum.KeyCode.A);
+                a.isHolding = false
+            elseif (transparency == 0) then
+                keypress(Enum.KeyCode.A);
+                if (isSphere) then
+                    a.isHolding = true
                 else
-                    keyrelease(0x41);
+                    keyrelease(Enum.KeyCode.A);
                 end
-                A.LastPressed = now
+                a.lastPressed = now
             end
         end
-        if ((D.Position - Position).Magnitude <= Option and now - D.LastPressed > .05) then --0x44
-            if (D.IsHolding and Transparency == 0.5) then
-                keyrelease(0x44);
-                D.IsHolding = false
-            elseif (Transparency == 0) then
-                keypress(0x44);
-                if (IsSphere) then
-                    D.IsHolding = true
+        if ((d.position - position).Magnitude <= timing and now - d.lastPressed > .05) then --0x44
+            if (d.isHolding and transparency == 0.5) then
+                keyrelease(Enum.KeyCode.D);
+                d.isHolding = false
+            elseif (transparency == 0) then
+                keypress(Enum.KeyCode.D);
+                if (isSphere) then
+                    d.isHolding = true
                 else
-                    keyrelease(0x44);
+                    keyrelease(Enum.KeyCode.D);
                 end
-                D.LastPressed = now
+                d.lastPressed = now
             end
         end
-        if ((S.Position - Position).Magnitude <= Option and now - S.LastPressed > .05) then --0x53
-            if (S.IsHolding and Transparency == 0.5) then
-                keyrelease(0x53);
-                S.IsHolding = false
-            elseif (Transparency == 0) then
-                keypress(0x53);
-                if (IsSphere) then
-                    S.IsHolding = true
+        if ((s.position - position).Magnitude <= timing and now - s.lastPressed > .05) then --0x53
+            if (s.isHolding and transparency == 0.5) then
+                keyrelease(Enum.KeyCode.S);
+                s.isHolding = false
+            elseif (transparency == 0) then
+                keypress(Enum.KeyCode.S);
+                if (isSphere) then
+                    s.isHolding = true
                 else
-                    keyrelease(0x53);
+                    keyrelease(Enum.KeyCode.S);
                 end
-                S.LastPressed = now
+                s.lastPressed = now
             end
         end
-        if ((F.Position - Position).Magnitude <= Option and now - F.LastPressed > .05) then --0x46
-            if (F.IsHolding and Transparency == 0.5) then
-                keyrelease(0x46);
-                F.IsHolding = false
-            elseif (Transparency == 0) then
-                keypress(0x46);
-                if (IsSphere) then
-                    F.IsHolding = true
+        if ((f.position - position).Magnitude <= timing and now - f.lastPressed > .05) then --0x46
+            if (f.isHolding and transparency == 0.5) then
+                keyrelease(Enum.KeyCode.F);
+                f.isHolding = false
+            elseif (transparency == 0) then
+                keypress(Enum.KeyCode.F);
+                if (isSphere) then
+                    f.isHolding = true
                 else
-                    keyrelease(0x46);
+                    keyrelease(Enum.KeyCode.F);
                 end
-                F.LastPressed = now
+                f.lastPressed = now
             end
         end
     end
 end);
+
+table.insert(_G.Connections, c1);
+table.insert(_G.Connections, changed);

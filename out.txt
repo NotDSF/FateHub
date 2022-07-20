@@ -1,0 +1,436 @@
+local questOrder = {
+	{
+		levels = { 1, 10 },
+		NPCName = "Bandit",
+		questNumber = 1,
+		questPosition = { 1060, 16, 1547 },
+		questName = "BanditQuest1"
+	},
+	{
+		levels = { 11, 15 },
+		NPCName = "Monkey",
+		questNumber = 1,
+		questPosition = { -1604, 36, 154 },
+		questName = "JungleQuest"
+	},
+	{
+		levels = { 16, 30 },
+		NPCName = "Gorilla",
+		questNumber = 2,
+		questPosition = { -1601, 36, 153 },
+		questName = "JungleQuest"
+	},
+	{
+		levels = { 31, 40 },
+		NPCName = "Pirate",
+		questNumber = 1,
+		questPosition = { -1140, 4, 3827 },
+		questName = "BuggyQuest1"
+	},
+	{
+		levels = { 41, 60 },
+		NPCName = "Brute",
+		questNumber = 2,
+		questPosition = { -1140, 4, 3827 },
+		questName = "BuggyQuest1"
+	},
+	{
+		levels = { 61, 75 },
+		NPCName = "Desert Bandit",
+		questNumber = 1,
+		questPosition = { 896, 6, 4390 },
+		questName = "DesertQuest"
+	},
+	{
+		levels = { 76, 90 },
+		NPCName = "Desert Officer",
+		questNumber = 2,
+		questPosition = { 896, 6, 4390 },
+		questName = "DesertQuest"
+	},
+	{
+		levels = { 91, 100 },
+		NPCName = "Snow Bandit",
+		questNumber = 1,
+		questPosition = { 1386, 87, -1298 },
+		questName = "SnowQuest"
+	},
+	{
+		levels = { 101, 120 },
+		NPCName = "Snowman",
+		questNumber = 2,
+		questPosition = { 1386, 87, -1298 },
+		questName = "SnowQuest"
+	},
+	{
+		levels = { 121, 150 },
+		NPCName = "Chief Petty Officer",
+		questNumber = 1,
+		questPosition = { -5035, 28, 4324 },
+		questName = "MarineQuest2"
+	},
+	{
+		levels = { 151, 175 },
+		NPCName = "Sky Bandit",
+		questNumber = 1,
+		questPosition = { -4841, 717, -2623 },
+		questName = "SkyQuest"
+	},
+	{
+		levels = { 176, 225 },
+		NPCName = "Dark Master",
+		questNumber = 2,
+		questPosition = { -4841, 717, -2623 },
+		questName = "SkyQuest"
+	},
+	{
+		levels = { 226, 275 },
+		NPCName = "Toga Warrior",
+		questNumber = 1,
+		questPosition = { -1576, 7, -2983 },
+		questName = "ColosseumQuest"
+	},
+	{
+		levels = { 276, 300 },
+		NPCName = "Gladiator",
+		questNumber = 2,
+		questPosition = { -1576, 7, -2983 },
+		questName = "ColosseumQuest"
+	},
+	{
+		levels = { 301, 330 },
+		NPCName = "Military Soldier",
+		questNumber = 1,
+		questPosition = { -5316, 12, 8517 },
+		questName = "MagmaQuest"
+	},
+	{
+		levels = { 301, 375 },
+		NPCName = "Military Spy",
+		questNumber = 2,
+		questPosition = { -5316, 12, 8517 },
+		questName = "MagmaQuest"
+	},
+	{
+		levels = { 376, 400 },
+		NPCName = "Fishman Warrior",
+		questNumber = 1,
+		questPosition = { 61122, 18, 1568 },
+		questName = "FishmanQuest"
+	},
+	{
+		levels = { 401, 450 },
+		NPCName = "Fishman Commando",
+		questNumber = 2,
+		questPosition = { 61122, 18, 1568 },
+		questName = "FishmanQuest"
+	},
+	{
+		levels = { 451, 475 },
+		NPCName = "God's Guard",
+		questNumber = 1,
+		questPosition = { -4721, 845, -1954 },
+		questName = "SkyExp1Quest"
+	},
+	{
+		levels = { 476, 525 },
+		NPCName = "Shanda",
+		questNumber = 2,
+		questPosition = { -7863, 5545, -379 },
+		questName = "SkyExp1Quest"
+	},
+	{
+		levels = { 526, 550 },
+		NPCName = "Royal Squad",
+		questNumber = 1,
+		questPosition = { -7902, 5635, -1411 },
+		questName = "SkyExp2Quest"
+	},
+	{
+		levels = { 551, 625 },
+		NPCName = "Royal Soldier",
+		questNumber = 2,
+		questPosition = { -7902, 5635, -1411 },
+		questName = "SkyExp2Quest"
+	},
+	{
+		levels = { 626, 650 },
+		NPCName = "Galley Pirate",
+		questNumber = 1,
+		questPosition = { 5254, 38, 4049 },
+		questName = "FountainQuest"
+	},
+	{
+		levels = { 701, 725 },
+		NPCName = "Raider",
+		questNumber = 1,
+		questPosition = { -424, 73, 1836 },
+		questName = "Area1Quest"
+	},
+	{
+		levels = { 726, 775 },
+		NPCName = "Mercenary",
+		questNumber = 2,
+		questPosition = { -424, 73, 1836 },
+		questName = "Area1Quest"
+	},
+	{
+		levels = { 776, 875 },
+		NPCName = "Swan Pirate",
+		questNumber = 1,
+		questPosition = { 632, 73, 918 },
+		questName = "Area2Quest"
+	},
+	{
+		levels = { 876, 900 },
+		NPCName = "Marine Lieutenant",
+		questNumber = 1,
+		questPosition = { -2442, 73, -3219 },
+		questName = "MarineQuest3"
+	},
+	{
+		levels = { 901, 950 },
+		NPCName = "Marine Captain",
+		questNumber = 2,
+		questPosition = { -2442, 73, -3219 },
+		questName = "MarineQuest3"
+	},
+	{
+		levels = { 951, 975 },
+		NPCName = "Zombie",
+		questNumber = 1,
+		questPosition = { -5492, 48, -793 },
+		questName = "ZombieQuest"
+	},
+	{
+		levels = { 976, 1000 },
+		NPCName = "Vampire",
+		questNumber = 2,
+		questPosition = { -5492, 48, -793 },
+		questName = "ZombieQuest"
+	},
+	{
+		levels = { 1001, 1050 },
+		NPCName = "Snow Trooper",
+		questNumber = 1,
+		questPosition = { 604, 401, -5371 },
+		questName = "SnowMountainQuest"
+	},
+	{
+		levels = { 1051, 1100 },
+		NPCName = "Winter Warrior",
+		questNumber = 2,
+		questPosition = { 604, 401, -5371 },
+		questName = "SnowMountainQuest"
+	},
+	{
+		levels = { 1101, 1125 },
+		NPCName = "Lab Subordinate",
+		questNumber = 1,
+		questPosition = { -6060, 15, -4904 },
+		questName = "IceSideQuest"
+	},
+	{
+		levels = { 1126, 1175 },
+		NPCName = "Horned Warrior",
+		questNumber = 2,
+		questPosition = { -6060, 15, -4904 },
+		questName = "IceSideQuest"
+	},
+	{
+		levels = { 1176, 1200 },
+		NPCName = "Magma Ninja",
+		questNumber = 1,
+		questPosition = { -5431, 15, -5296 },
+		questName = "FireSideQuest"
+	},
+	{
+		levels = { 1201, 1350 },
+		NPCName = "Lava Pirate",
+		questNumber = 2,
+		questPosition = { -5431, 15, -5296 },
+		questName = "FireSideQuest"
+	},
+	{
+		levels = { 1351, 1375 },
+		NPCName = "Arctic Warrior",
+		questNumber = 1,
+		questPosition = { 5669, 28, -6482 },
+		questName = "FrostQuest"
+	},
+	{
+		levels = { 1376, 1425 },
+		NPCName = "Snow Lurker",
+		questNumber = 2,
+		questPosition = { 5669, 28, -6482 },
+		questName = "FrostQuest"
+	},
+	{
+		levels = { 1426, 1450 },
+		NPCName = "Sea Soldier",
+		questNumber = 1,
+		questPosition = { -3052, 236, -10148 },
+		questName = "ForgottenQuest"
+	},
+	{
+		levels = { 1451, 1500 },
+		NPCName = "Water Fighter",
+		questNumber = 2,
+		questPosition = { -3052, 236, -10148 },
+		questName = "ForgottenQuest"
+	},
+	{
+		levels = { 1501, 1525 },
+		NPCName = "Pirate Millionaire",
+		questNumber = 1,
+		questPosition = { -290, 42, 5581 },
+		questName = "PiratePortQuest"
+	},
+	{
+		levels = { 1526, 1575 },
+		NPCName = "Pistol Billionaire",
+		questNumber = 2,
+		questPosition = { -290, 42, 5581 },
+		questName = "PiratePortQuest"
+	},
+	{
+		levels = { 1576, 1600 },
+		NPCName = "Dragon Crew Warrior",
+		questNumber = 1,
+		questPosition = { 5832, 51, -1101 },
+		questName = "AmazonQuest"
+	},
+	{
+		levels = { 1601, 1625 },
+		NPCName = "Dragon Crew Archer",
+		questNumber = 2,
+		questPosition = { 5832, 51, -1101 },
+		questName = "AmazonQuest"
+	},
+	{
+		levels = { 1626, 1650 },
+		NPCName = "Female Islander",
+		questNumber = 1,
+		questPosition = { 5448, 601, 751 },
+		questName = "AmazonQuest2"
+	},
+	{
+		levels = { 1651, 1700 },
+		NPCName = "Giant Islander",
+		questNumber = 2,
+		questPosition = { 5448, 601, 751 },
+		questName = "AmazonQuest2"
+	},
+	{
+		levels = { 1701, 1725 },
+		NPCName = "Marine Commodore",
+		questNumber = 1,
+		questPosition = { 2180, 27, -6741 },
+		questName = "MarineTreeIsland"
+	},
+	{
+		levels = { 1726, 1775 },
+		NPCName = "Marine Rear Admiral",
+		questNumber = 2,
+		questPosition = { 2180, 27, -6741 },
+		questName = "MarineTreeIsland"
+	},
+	{
+		levels = { 1776, 1800 },
+		NPCName = "Fishman Raider",
+		questNumber = 1,
+		questPosition = { -10581, 330, -8761 },
+		questName = "DeepForestIsland3"
+	},
+	{
+		levels = { 1801, 1825 },
+		NPCName = "Fishman Captain",
+		questNumber = 2,
+		questPosition = { -10581, 330, -8761 },
+		questName = "DeepForestIsland3"
+	},
+	{
+		levels = { 1826, 1850 },
+		NPCName = "Forest Pirate",
+		questNumber = 1,
+		questPosition = { -13234, 331, -7625 },
+		questName = "DeepForestIsland"
+	},
+	{
+		levels = { 1851, 1900 },
+		NPCName = "Mythological Pirate",
+		questNumber = 2,
+		questPosition = { -13234, 331, -7625 },
+		questName = "DeepForestIsland"
+	},
+	{
+		levels = { 1901, 1925 },
+		NPCName = "Jungle Pirate",
+		questNumber = 1,
+		questPosition = { -12680, 389, -9902 },
+		questName = "DeepForestIsland2"
+	},
+	{
+		levels = { 1926, 1975 },
+		NPCName = "Musketeer Pirate",
+		questNumber = 2,
+		questPosition = { -12680, 389, -9902 },
+		questName = "DeepForestIsland2"
+	},
+	{
+		levels = { 1976, 2000 },
+		NPCName = "Reborn Skeleton",
+		questNumber = 1,
+		questPosition = { -9480, 142, 5566 },
+		questName = "HauntedQuest1"
+	},
+	{
+		levels = { 2001, 2025 },
+		NPCName = "Living Zombie",
+		questNumber = 2,
+		questPosition = { -9480, 142, 5566 },
+		questName = "HauntedQuest1"
+	},
+	{
+		levels = { 2026, 2050 },
+		NPCName = "Demonic Soul",
+		questNumber = 1,
+		questPosition = { -9516, 178, 6078 },
+		questName = "HauntedQuest2"
+	},
+	{
+		levels = { 2051, 2075 },
+		NPCName = "Posessed Mummy",
+		questNumber = 2,
+		questPosition = { -9516, 178, 6078 },
+		questName = "HauntedQuest2"
+	},
+	{
+		levels = { 2076, 2100 },
+		NPCName = "Peanut Scout",
+		questNumber = 1,
+		questPosition = { -2104, 38, -10194 },
+		questName = "NutsIslandQuest"
+	},
+	{
+		levels = { 2101, 2125 },
+		NPCName = "Peanut President",
+		questNumber = 2,
+		questPosition = { -2104, 38, -10194 },
+		questName = "NutsIslandQuest"
+	},
+	{
+		levels = { 2126, 2150 },
+		NPCName = "Ice Cream Chef",
+		questNumber = 1,
+		questPosition = { -820, 65, -10966 },
+		questName = "IceCreamIslandQuest"
+	},
+	{
+		levels = { 2151, 2300 },
+		NPCName = "Ice Cream Commander",
+		questNumber = 2,
+		questPosition = { -820, 65, -10966 },
+		questName = "IceCreamIslandQuest"
+	},
+};

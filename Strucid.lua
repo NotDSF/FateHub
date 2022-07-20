@@ -2,7 +2,7 @@ local TweenService = game:GetService("TweenService")
 local UILibrary = loadfile("UILibrary.lua")();
 local VisualsLib = loadfile("Visuals.lua")();
 local Visuals = VisualsLib.new();
-local services = setmetatable({}, {
+local Services = setmetatable({}, {
     __index = function(self, serviceName)
         local good, service = pcall(game.GetService, game, serviceName);
         if (good) then
@@ -12,17 +12,17 @@ local services = setmetatable({}, {
     end
 });
 
-local Workspace = services.Workspace
+local Workspace = Services.Workspace
 local currentCamera = Workspace.currentCamera
 local worldtoscreen = currentCamera.WorldToScreenPoint
 local viewportSize = currentCamera.ViewportSize
-local ReplicatedStorage = services.ReplicatedStorage
-local UserInputService = services.UserInputService
-local Players = services.Players
+local ReplicatedStorage = Services.ReplicatedStorage
+local UserInputService = Services.UserInputService
+local Players = Services.Players
 local localPlayer = Players.LocalPlayer
 local mouse = localPlayer:GetMouse();
 local mouseVector = Vector2.new(mouse.X, mouse.Y);
-local inset = services.GuiService:GetGuiInset();
+local inset = Services.GuiService:GetGuiInset();
 
 local findFirstChild = game.FindFirstChild
 local waitForChild = game.WaitForChild
@@ -46,12 +46,12 @@ local tfind = table.find
 local insert = table.insert
 local IsA = game.IsA
 
-local TS = filtergc("table", {
-    Keys = { "Characters", "Teams", "Network" }
-})[1];
-local Network = TS.Network
-local Characters = TS.Characters
-local Teams = TS.Teams
+local globalStuff = filtergc("table", {
+    Keys = {"IsVIPServer"}
+}, true);
+local Network = filtergc("table", {
+    Keys = {"InvokeServer", "FireServer", "ClientBind", "Call"}
+}, true);
 
 local aliveCharacters = {};
 local drawEntries = {};
@@ -62,16 +62,12 @@ local protectedInstances = {};
 local locked = false
 local flying = false
 
-local controlScriptClosure = getscriptclosure(localPlayer.PlayerScripts.ControlScript);
-local changestate = debug.getproto(controlScriptClosure, 14, true)[1];
-local getspeed = debug.getproto(controlScriptClosure, 2, true)[1]
-
 local settings = {
     gunmods = {
         no_recoil = false,
         instant_scope = false,
         instant_reload = false,
-        no_wep_shake = false,
+        accurate = false,
         fire_mode = nil,
         fire_rate = 750
     },
@@ -108,11 +104,12 @@ local settings = {
         weapon_color = color3new(1, 0, 0),
         weapon_material = "SmoothPlastic",
         color_weapon = false,
-        arms_color = color3new(1, 0, 0),
-        arm_material = "SmoothPlastic",
-        color_arm = false,
+        body_color = color3new(1, 0, 0),
+        body_material = "SmoothPlastic",
+        color_body = false,
         third_person = false,
-        third_person_values = {1, 2, 10};
+        third_person_values = {1, 2, 10},
+        auto_deploy = false
     },
 
     movement = {
@@ -196,28 +193,6 @@ local protectInstance = function(instance)
     protectedInstances[#protectedInstances + 1] = instance
 end
 
-local __namecall;
-__namecall = hookmetamethod(game, "__namecall", function(self, ...)
-    if (not checkcaller() and getnamecallmethod() == "GetDescendants") then
-        local descendants = __namecall(self, ...);
-        local filteredDescendants = {};
-        for index, descendant in pairs(descendants) do
-            if (not table.find(protectedInstances, descendant)) then
-                filteredDescendants[#filteredDescendants + 1] = descendant
-            end
-        end
-        return filteredDescendants;
-    end
-    return __namecall(self, ...);
-end);
-
-local __newindex;
-__newindex = hookmetamethod(game, "__newindex", function(self, prop, value)
-    if (characterSettings.third_person and self == currentCamera and prop == "CFrame") then
-        value *= cframenew(unpack(characterSettings.third_person_values));
-    end
-    return __newindex(self, prop, value);
-end);
 
 local began;
 local mouse1press = function()
@@ -305,81 +280,40 @@ end);
 local backup = {};
 local updateWeaponSettings = function() -- will change
     if (not aliveCharacters[localPlayer]) then return; end;
+    local gunSettings = filtergc("table", {
+        Keys = {"Recoil"}
+    });
 
-    local items = waitForChild(waitForChild(aliveCharacters[localPlayer], "Backpack"), "Items");
-    for index, value in pairs(filtergc("table", {
-        Keys = { "Controller", "Animators", "Model", "Slot", "Category" }
-    })) do
-        if (findFirstChild(items, value.Model)) then
-            local recoil = value.Recoil
-            if (recoil and type(recoil) == "table") then
-                local recoilSettings = recoil.Default
-                if (recoilSettings) then
-                    if (not backup[recoilSettings]) then
-                        backup[recoilSettings] = {};
-                        for i, v in pairs(recoilSettings) do
-                            backup[recoilSettings][i] = v
-                        end
-                    end
-
-                    if (gunmodSettings.no_recoil) then
-                        recoilSettings.RecoilMovement = vector2new(1, 1);
-                        recoilSettings.CameraRotationVariance = vector3new(1, 1);
-                        recoilSettings.RecoilMovementVariance = vector2new(1, 1);
-                        recoilSettings.RecoilRecenterTime = 0
-                        recoilSettings.RecoilMovementTime = 0
-                        recoilSettings.RecoilCrouchScale = 0
-                        recoilSettings.RecoilProneScale = 0
-                    else
-                        local backup = backup[recoilSettings]
-                        if (backup) then
-                            recoilSettings.RecoilMovement = backup.RecoilMovement
-                            recoilSettings.CameraRotationVariance = backup.CameraRotationVariance
-                            recoilSettings.RecoilMovementVariance = backup.RecoilMovementVariance
-                            recoilSettings.RecoilRecenterTime = backup.RecoilRecenterTime
-                            recoilSettings.RecoilMovementTime = backup.RecoilMovementTime
-                            recoilSettings.RecoilCrouchScale = backup.RecoilCrouchScale
-                            recoilSettings.RecoilProneScale = backup.RecoilProneScale
-                        end
-                    end
-
-                    if (gunmodSettings.no_wep_shake) then
-                        for i, v in pairs(recoilSettings) do
-                            if (type(v) == "vector") then
-                                recoilSettings[i] = vector3new(0, 0);
-                            end
-                        end
-                    else
-                        local backup = backup[recoilSettings]
-                        for i, v in pairs(recoilSettings) do
-                            if (type(v) == "vector") then
-                                recoilSettings[i] = backup[i]
-                            end
-                        end
-                    end
+    for i, config in pairs(gunSettings) do
+        if (gunmodSettings.no_recoil) then
+            if (type(config.Recoil) == "number") then
+                backup[config] = {};
+                for i, v in pairs(config) do
+                    backup[config][i] = v
                 end
-                
+                rawset(config, "Recoil", 0);
+                rawset(config, "WRecoil", 0);
             end
-
-            local aim = value.Aim
-            if (type(aim) == "table" and type(aim.AimTime) == "number") then
-                if (gunmodSettings.instant_scope) then
-                    if (not backup[value.Aim]) then
-                        backup[value.Aim] = {};
-                        for i, v in pairs(value.Aim) do
-                            backup[value.Aim][i] = v
-                        end
-                    end
-                    aim.AimTime = 0
-                else
-                    local backup = backup[value.Aim]
-                    if (backup) then
-                        aim.AimTime = backup.AimTime
-                    end
-                end
+        else
+            if (backup[config]) then
+                rawset(config, "Recoil", backup[config].Recoil);
+                rawset(config, "WRecoil", backup[config].WRecoil);
             end
-
         end
+        if (gunmodSettings.accurate) then
+            if (type(config.Inaccuracy) == "number") then
+                backup[config] = {};
+                for i, v in pairs(config) do
+                    backup[config][i] = v
+                end
+                rawset(config, "Inaccuracy", 0);
+            end
+        else
+            if (backup[config]) then
+                rawset(config, "Inaccuracy", backup[config].Inaccuracy);
+            end
+        end
+
     end
 end
 
@@ -416,34 +350,14 @@ local handleTracking = function(player, character) -- will remake
 end
 
 local isEnemy = function(player)
-    local enemyTeam = teamsPlayers[player]
-    if (enemyTeam == "FFA") then
-        return true;
-    end
-    return enemyTeam ~= teamsPlayers[localPlayer];
-end
-local getTeamColor;
-do
-    local teamColorCache = {};
-    getTeamColor = function(team)
-        local cache = teamColorCache[team]
-        if (cache) then
-            return cache;
-        end
-        local color = findFirstChild(services.Teams, team).Color
-        if (team) then
-            local value = color.Value
-            teamColorCache[team] = value
-            return value;
-        end
-    end
+    return localPlayer.Team ~= player.Team or (localPlayer.Team == nil and player.Team == nil); --not trampoline_call(globalStuff.SameTeam, globalStuff, localPlayer, player);
 end
 
 local addPlayerDrawings = function(player)
     if (player == localPlayer) then return; end;
     local char = aliveCharacters[player]
     if (not char) then return; end
-    local root = waitForChild(char, "Root");
+    local root = waitForChild(char, "HumanoidRootPart");
     local charVisuals = Visuals:Add(root);
     local esp_enabled = espSettings.enabled
     charVisuals:AddText(player.Name, {
@@ -479,8 +393,8 @@ local addPlayerDrawings = function(player)
     drawEntries[player] = charVisuals
 end
 
-for i, team in pairs(services.Teams:GetChildren()) do
-    team.Players.ChildAdded:Connect(function(obj)
+for i, team in pairs(Services.Teams:GetChildren()) do
+    team.ChildAdded:Connect(function(obj)
         local player = obj.Value
         teamsPlayers[player] = team.Name
     end);
@@ -494,10 +408,12 @@ Players.PlayerRemoving:Connect(function(player)
     end
 end);
 
+local hook, coneOfFire;
+
 for index, player in pairs(Players:GetPlayers()) do
-    local Team = trampoline_call(Teams.GetPlayerTeam, Teams, player);
+    local Team = player.Team--trampoline_call(Teams.GetPlayerTeam, Teams, player);
     teamsPlayers[player] = Team
-    local char = trampoline_call(Characters.GetCharacter, Characters, player);
+    local char = player.Character--trampoline_call(Characters.GetCharacter, Characters, player);
     if (char) then
         aliveCharacters[player] = char
     end
@@ -505,25 +421,61 @@ for index, player in pairs(Players:GetPlayers()) do
         updateWeaponSettings();
     end
     task.spawn(addPlayerDrawings, player);
+
+    player.CharacterAdded:Connect(function(char)
+        local root = waitForChild(char, "HumanoidRootPart");
+        aliveCharacters[player] = char
+        if (player == localPlayer) then
+            updateWeaponSettings();
+        end
+        addPlayerDrawings(player);
+    end);
 end
 
-Workspace.Characters.ChildAdded:Connect(function(char)
-    local root = waitForChild(char, "Root");
-    local player = trampoline_call(Characters.GetPlayerFromCharacter, Characters, char);
-    aliveCharacters[player] = char
-    if (player == localPlayer) then
+Players.PlayerAdded:Connect(function(player)
+    local Team = player.Team--trampoline_call(Teams.GetPlayerTeam, Teams, player);
+    teamsPlayers[player] = Team
+    local char = player.Character--trampoline_call(Characters.GetCharacter, Characters, player);
+    if (char) then
+        aliveCharacters[player] = char
+    end
+    if (player == localPlayer and char) then
         updateWeaponSettings();
     end
-    addPlayerDrawings(player);
+    task.spawn(addPlayerDrawings, player);
+
+    player.CharacterAdded:Connect(function(char)
+        local root = waitForChild(char, "HumanoidRootPart");
+        aliveCharacters[player] = char
+        if (player == localPlayer) then
+            updateWeaponSettings();
+        end
+        addPlayerDrawings(player);
+    end);
 end);
 
-local remoteCharKilled = findFirstChild(ReplicatedStorage, "RemoteCharacterKilled", true);
-remoteCharKilled.OnClientEvent:Connect(function(char)
-    local player = trampoline_call(Characters.GetPlayerFromCharacter, Characters, char);
-    aliveCharacters[player] = nil
-    local drawEntry = drawEntries[player]
-    if (drawEntry) then
-        drawEntry:Destroy();
+localPlayer.PlayerGui.ChildAdded:Connect(function(child)
+    if (child.Name == "MainGui") then
+        local NewLocal = child:WaitForChild("NewLocal");
+        local tools = NewLocal:WaitForChild("Tools");
+        local tool = tools:WaitForChild("Tool");
+        local gun = tool:WaitForChild("Gun");
+        task.wait(.1);
+        coneOfFire = hookfunction(require(gun).ConeOfFire, hook);
+    end
+end);
+
+local Deploy = filtergc("function", {
+    Name = "Deploy"
+}, true);
+
+localPlayer.PlayerGui.ChildRemoved:Connect(function(child)
+    if (child.Name == "MainGui") then
+        if (characterSettings.auto_deploy) then
+            task.wait();
+            trampoline_call(Deploy);
+            -- trampoline_call(Network.InvokeServer, Network, "Deploy");
+        end
     end
 end);
 
@@ -540,6 +492,43 @@ snapLine.Color = fovSettings.fov_color
 snapLine.Thickness = .1
 snapLine.From = Point2D.new(mouseVector);
 
+
+local getEquippedTool = function(char)
+    local IgnoreThese = workspace.IgnoreThese
+    if (trampoline_call(globalStuff.IsAlive, globalStuff, localPlayer) == nil) then
+        return;
+    end
+    local root = char.HumanoidRootPart
+    local children = IgnoreThese:GetChildren();
+    local gun, dist =  nil, math.huge
+    for i = 1, #children do
+        local child = children[i]
+        local body = findFirstChild(child, "Body1");
+        local axe = findFirstChild(child, "Handle1");
+        if (body) then
+            local mag = (root.Position - body.Position).Magnitude
+            if (mag < dist) then
+                dist = mag
+                gun = body
+            end
+        elseif axe then
+            local mag = (root.Position - axe.Position).Magnitude
+            if (mag < dist) then
+                dist = mag
+                gun = axe
+            end
+        end
+    end
+
+    if (dist < 3) then
+        local isGun = gun.Name == "Body1"
+        return gun, isGun;
+    end
+end
+
+
+local ignoreList = { findFirstChild(Workspace, "GroundWeapons"), findFirstChild(Workspace, "IgnoreThese") };
+
 local getClosestPlayer = function()
     local closest = create(6);
     local vector2Distance = math.huge
@@ -550,13 +539,13 @@ local getClosestPlayer = function()
     local localChar = aliveCharacters[localPlayer]
     if (not localChar) then return; end;
 
-    local localHitbox = findFirstChild(localChar, "Hitbox");
+    local localHitbox = findFirstChild(localChar, "HumanoidRootPart");
     for player, character in pairs(aliveCharacters) do
-        local hitbox = findFirstChild(character, "Hitbox");
+        local hitbox = findFirstChild(character, "HumanoidRootPart");
         if (player ~= localPlayer and localHitbox and hitbox) then
-            local localRoot = localChar.Root
-            local redirect = findFirstChild(hitbox, aimbotSettings.lock_on);
-            local redirect_rage = findFirstChild(hitbox, rageSettings.redirect);
+            local localRoot = localChar.HumanoidRootPart
+            local redirect = findFirstChild(character, aimbotSettings.lock_on);
+            local redirect_rage = findFirstChild(character, rageSettings.redirect);
             if (not redirect) then
                 continue;
             end
@@ -569,7 +558,7 @@ local getClosestPlayer = function()
             local inRenderDistance = vector3Magnitude <= espSettings.render_distance
 
             local enemy = isEnemy(player);
-            local parts = GetPartsObscuringTarget(currentCamera, {currentCamera.CFrame.Position, redirect_rage.CFrame.Position}, {localChar, character});
+            local parts = GetPartsObscuringTarget(currentCamera, {currentCamera.CFrame.Position, redirect_rage.CFrame.Position}, {localChar, character, unpack(ignoreList)});
 
             if (visible and enemy and vector2Magnitude <= vector2Distance and vector2Magnitude <= FOV.Radius and aimbotSettings.closest_cursor) then
                 vector2Distance = vector2Magnitude
@@ -597,8 +586,9 @@ local getClosestPlayer = function()
                 local text = drawEntry:Get("TextDynamic");
                 local tracer = drawEntry:Get("LineDynamic");
                 local box, healthbarout, healthbar = drawEntry:Get("RectDynamic");
-                local health = character.Health
-                local currenthealth, maxhealth = floor(health.Value), floor(health.MaxHealth.Value);
+                local humanoid = findFirstChild(character, "Humanoid");
+
+                local currenthealth, maxhealth = floor(humanoid and humanoid.Health or 0), floor(humanoid and humanoid.MaxHealth or 0);
                 text.Text = format("%s\n%s%s",
                     espSettings.names_enabled and player.Name or "",
                     espSettings.distance_enabled and format("[%s]", floor(vector3Magnitude)) or "",
@@ -606,10 +596,11 @@ local getClosestPlayer = function()
                 );
 
                 if (espSettings.team_colors) then
-                    local teamColor = getTeamColor(teamsPlayers[player]);
-                    text.Color = teamColor
-                    tracer.Color = teamColor
-                    box.Color = teamColor
+                    local playerTeamColor = player.TeamColor
+                    local color = playerTeamColor.Color
+                    text.Color = color
+                    tracer.Color = color
+                    box.Color = color
                 end
 
                 tracer.Visible = espSettings.tracers_enabled
@@ -653,9 +644,9 @@ UserInputService.InputBegan:Connect(function(key, GPE)
     end
 end);
 
-local backpack, equippedWeapon, ignoreList;
+local backpack, equippedWeapon;
 local closestCharacter, vector, closestPlayer, redirect, vector3Magnitude, closestViewable, viewable;
-services.RunService.RenderStepped:Connect(function()
+Services.RunService.RenderStepped:Connect(function()
     mouseVector = vector2new(mouse.X, mouse.Y) + inset;
     local localCharacter = aliveCharacters[localPlayer]
     local mouseVector2D = Point2D.new(mouseVector);
@@ -681,20 +672,20 @@ services.RunService.RenderStepped:Connect(function()
     end
 
     if (rageSettings.kill_aura and vector3Magnitude and vector3Magnitude < 50 and closestCharacter) then
-        if (not backpack) then
-            backpack = aliveCharacters[localPlayer].Backpack
-        end
-        local equipped = backpack.Equipped.value
-        local knife = backpack.Melee.value
-        trampoline_call(Network.Fire, Network, "Item", "Equip", knife);
-        local redirect_rage = redirect[2]
-        for index = 1, 3 do
-            if (localCharacter) then
-                trampoline_call(Network.Fire, Network, "Item_Melee", "StabBegin", knife);
-                trampoline_call(Network.Fire, Network, "Item_Melee", "Stab", knife, redirect_rage, redirect_rage.Position, (localCharacter.Root.CFrame * cframe_angles(0, -rad(-3 * 5), 0)).LookVector * (75 + -3));
-            end
-            wait();
-        end
+        -- if (not backpack) then
+        --     backpack = aliveCharacters[localPlayer].Backpack
+        -- end
+        -- local equipped = backpack.Equipped.value
+        -- local knife = backpack.Melee.value
+        -- trampoline_call(Network.Fire, Network, "Item", "Equip", knife);
+        -- local redirect_rage = redirect[2]
+        -- for index = 1, 3 do
+        --     if (localCharacter) then
+        --         trampoline_call(Network.Fire, Network, "Item_Melee", "StabBegin", knife);
+        --         trampoline_call(Network.Fire, Network, "Item_Melee", "Stab", knife, redirect_rage, redirect_rage.Position, (localCharacter.Root.CFrame * cframe_angles(0, -rad(-3 * 5), 0)).LookVector * (75 + -3));
+        --     end
+        --     wait();
+        -- end
     end
 
     if (aimbotSettings.triggerbot) then
@@ -702,7 +693,7 @@ services.RunService.RenderStepped:Connect(function()
             if (not localCharacter) then return end
             backpack = findFirstChild(localCharacter, "Backpack");
             if (not backpack) then return end
-            ignoreList = {localCharacter};
+            ignoreList[# ignoreList+1] = localCharacter;
             equippedWeapon = localCharacter.Backpack.Equipped.value
             if (not equippedWeapon) then return end
             for index, child in pairs(Workspace:GetChildren()) do
@@ -730,21 +721,12 @@ services.RunService.RenderStepped:Connect(function()
 
     if (characterSettings.color_weapon) then
         if (localCharacter) then
-            equippedWeapon = localCharacter.Backpack.Equipped.value
-            if (not equippedWeapon) then
-                return;
-            end
-            local weaponBody;
-            for index, child in pairs(Workspace:GetChildren()) do
-                if (child.Name == equippedWeapon.Name) then
-                    weaponBody = child.Body
-                end
-            end
+            local weaponBody = getEquippedTool(localCharacter);
             if (not weaponBody) then
                 return;
             end
             local parts = {};
-            for i,part in pairs(weaponBody:GetDescendants()) do
+            for i,part in pairs(weaponBody.Parent:GetDescendants()) do
                 if (IsA(part, "MeshPart") or IsA(part, "Part")) then
                     table.insert(parts, part);
                 end
@@ -760,10 +742,9 @@ services.RunService.RenderStepped:Connect(function()
         end
     end
 
-    if (characterSettings.color_arms) then
-        local arms = findFirstChild(Workspace, "Arms");
+    if (characterSettings.color_body) then
         local parts = {};
-        for i, part in pairs(arms:GetDescendants()) do
+        for i, part in pairs(localCharacter:GetDescendants()) do
             if (IsA(part, "MeshPart") or IsA(part, "Part")) then
                 table.insert(parts, part);
             end
@@ -771,84 +752,24 @@ services.RunService.RenderStepped:Connect(function()
 
         for i = 1, #parts do
             local part = parts[i]
-            part.Color = characterSettings.arms_color
-            if (part.Material ~= Enum.Material[characterSettings.arm_material]) then
-                part.Material = Enum.Material[characterSettings.arm_material]
+            part.Color = characterSettings.body_color
+            if (part.Material ~= Enum.Material[characterSettings.body_material]) then
+                part.Material = Enum.Material[characterSettings.body_material]
             end
         end
     end
 
     if (rageSettings.auto_shoot and closestViewable) then
-        mouse1press();
-        mouse1release();
+        -- mouse1press();
+        -- mouse1release();
     end
 end);
-
-task.spawn(function()
-    local mt = setmetatable({}, {});
-    mt.__index = mt
-    while wait() do
-        local char = aliveCharacters[localPlayer]
-        local state;
-        if (char) then
-            state = findFirstChild(char, "State");
-            if (movementSettings.bhop and state) then
-                debug.setupvalue(changestate, 16, 9e9);
-                debug.setupvalue(changestate, 23, 0);
-                debug.setupvalue(changestate, 13, mt);
-                changestate("Jump", false);
-                -- state.Grounded.Changed:Wait();
-                local grounded = state.Grounded
-                local isGrounded = grounded.Value
-                repeat
-                    wait();
-                until grounded.Value ~= isGrounded or not aliveCharacters[localPlayer]
-            end
-            if (movementSettings.auto_strafe and state) then
-                local sprinting = findFirstChild(state, "Sprinting");
-                if (sprinting and not sprinting.Value) then
-                    wait(.1);
-                    changestate("Sprint", false);
-                end
-            end
-        end
-    end
-end);
-
-local vector3newhook;
-vector3newhook = hookfunction(getrenv().Vector3.new, function(...)
-    local caller = debug.getinfo(2, "n");
-    if (caller.name == "GetMovementInput") then
-        if (select("#", ...) == 0) then
-            if (movementSettings.auto_strafe) then
-                return vector3newhook(0, 0, -1);
-            end
-        end
-    end
-    return vector3newhook(...);
-end);
-
-hookfunction(getspeed, function()
-    return -movementSettings.walkspeed / 16 + 1
-end);
-
-local getBaseModels = function()
-    local children = Workspace:GetChildren();
-    local baseModels = {};
-    for i = 1, #children do
-        local child = children[i]
-        if (IsA(child, "Model")) then
-            baseModels[#baseModels + 1] = child
-        end
-    end
-    return unpack(baseModels);
-end
 
 local createBeam = function(char, from, to, lv)
     local dist = (to - from);
     local magnitude = dist.Magnitude
 
-    local part, pos = findPartOnRayWithIgnoreList(workspace, Ray.new(from, dist.Unit * 1000), {char, currentCamera, getBaseModels()}, false, true);
+    local part, pos = findPartOnRayWithIgnoreList(workspace, Ray.new(from, dist.Unit * 1000), {char, currentCamera, unpack(ignoreList)}, false, true);
     if (not part) then
         return;
     end
@@ -873,59 +794,51 @@ local createBeam = function(char, from, to, lv)
     end);
 end
 
-local initProjectile;
-initProjectile = hookfunction(TS.Projectiles.InitProjectile, function(...)
-    local args = {...};
-    local localCharacter = aliveCharacters[localPlayer]
-
-    if (espSettings.bullet_tracers or rageSettings.auto_shoot or rageSettings.silent_aim or backtrackSettings.backtrack and args[5] == localPlayer) then
-        local hitbox;
+hook = function(...)
+    if (espSettings.bullet_tracers or rageSettings.auto_shoot or rageSettings.silent_aim or backtrackSettings.backtrack and redirect[2]) then
+        local localCharacter = aliveCharacters[localPlayer]
+        local hitbox = closestCharacter;
         local target_char = closestViewable
-
+        local weaponBody = getEquippedTool(localCharacter);
         if (rageSettings.auto_shoot and target_char) then
-            hitbox = target_char.Hitbox
-            args[3] = hitbox[rageSettings.redirect].CFrame.Position - args[4]
             if (espSettings.bullet_tracers) then
-                createBeam(localCharacter, localCharacter.Root.CFrame.Position, args[3], args[4]);
+                createBeam(localCharacter, weaponBody.Position, redirect[2].Position, currentCamera.CFrame.LookVector);
             end
-            return initProjectile(unpack(args));
+            return redirect[2].Position;
         end
-
         if (closestCharacter and closestPlayer) then
-            hitbox = closestCharacter.Hitbox
-            local viewable = GetPartsObscuringTarget(currentCamera, {currentCamera.CFrame.Position, hitbox[rageSettings.redirect].CFrame.Position}, {aliveCharacters[localPlayer], closestCharacter});
+            local viewable = GetPartsObscuringTarget(currentCamera, {currentCamera.CFrame.Position, hitbox[rageSettings.redirect].CFrame.Position}, {aliveCharacters[localPlayer], redirect[2], unpack(ignoreList)});
             if (rageSettings.silent_aim and #viewable == 0 or rageSettings.wallbang) then
-                args[3] = hitbox[rageSettings.redirect].CFrame.Position - args[4]
+                -- args[3] = hitbox[rageSettings.redirect].CFrame.Position - args[4]
                 if (espSettings.bullet_tracers) then
-                    createBeam(localCharacter, localCharacter.Root.CFrame.Position, args[3], args[4]);
+                    createBeam(localCharacter, weaponBody.Position, redirect[2].Position, currentCamera.CFrame.LookVector);
                 end
-                return initProjectile(unpack(args));
+                return redirect[2].Position;
             end
         end
-
         if (backtrackSettings.backtrack) then
             local unitRay = mouse.UnitRay
             if (localCharacter) then
-                local part = findPartOnRayWithIgnoreList(Workspace, Ray.new(unitRay.Origin, unitRay.Direction * 1000), {localCharacter, currentCamera, getBaseModels()});
+                local part = findPartOnRayWithIgnoreList(Workspace, Ray.new(unitRay.Origin, unitRay.Direction * 1000), {localCharacter, currentCamera, unpack(ignoreList)});
                 for character, characterTrackers in pairs(trackers) do
                     local DoBackTrack = table.find(characterTrackers, part);
                     if (DoBackTrack and hitbox) then
-                        args[3] = hitbox[aimbotSettings.lock_on].CFrame.Position - args[4]
+                        -- args[3] = hitbox[aimbotSettings.lock_on].CFrame.Position - args[4]
                         if (espSettings.bullet_tracers) then
-                            createBeam(localCharacter, localCharacter.Root.CFrame.Position, args[3], args[4]);
+                            -- createBeam(localCharacter, localCharacter.Root.CFrame.Position, args[3], args[4]);
                         end
-                        return initProjectile(unpack(args));
+                        return redirect[2].Position;--, vector3new(0, 1, 0), redirect[2].Material
+                        -- return initProjectile(unpack(args));
                     end
                 end
             end
         end
-
-        if (espSettings.bullet_tracers and args[5] == localPlayer) then
-            createBeam(localCharacter, localCharacter.Root.CFrame.Position, mouse.Hit.Position, args[4]);
+        if (espSettings.bullet_tracers) then
+            createBeam(localCharacter, weaponBody.Position, mouse.Hit.Position, currentCamera.CFrame.LookVector);
         end
     end
-    return initProjectile(...);
-end);
+    return coneOfFire(...);
+end
 
 local mainWindow = UILibrary:CreateWindow("Fate Hub", "Bad Business", Color3.fromRGB(100, 0, 255));
 
@@ -1027,7 +940,7 @@ local fn = function(callback)
         table.insert(espSettings.show_teams, teamsPlayers[localPlayer]);
     end
     if (callback == "Allies") then
-        local teamsChildren = services.Teams:GetChildren();
+        local teamsChildren = Services.Teams:GetChildren();
         local teamsNames = {};
         for i, team in pairs(teamsChildren) do
             local teamName = team.Name
@@ -1064,14 +977,14 @@ end, false);
 
 local character = visuals:Section("Self");
 character:SetRight();
-character:Toggle("Arms Color", characterSettings.color_arms, function(callback)
-    characterSettings.color_arms = callback
-end):Colorpicker(characterSettings.arms_color, function(callback)
-    characterSettings.arms_color = callback
+character:Toggle("Body Color", characterSettings.color_body, function(callback)
+    characterSettings.color_body = callback
+end):Colorpicker(characterSettings.body_color, function(callback)
+    characterSettings.body_color = callback
 end);
 
-character:Dropdown("Arms Material", characterSettings.arm_material, { "SmoothPlastic", "ForceField", "Neon", "Glass" }, function(callback)
-    characterSettings.arm_material = callback
+character:Dropdown("Body Material", characterSettings.body_material, { "SmoothPlastic", "ForceField", "Neon", "Glass" }, function(callback)
+    characterSettings.body_material = callback
 end);
 
 character:Toggle("Weapon Color", characterSettings.color_weapon, function(callback)
@@ -1093,13 +1006,13 @@ world:Toggle("No Shadows", false, function(callback)
             v.Range = math.huge
         end
     end
-    services.Lighting.GlobalShadows = not callback
+    Services.Lighting.GlobalShadows = not callback
 end);
-world:Slider("Time of Day", 0, 24, floor(services.Lighting.ClockTime), function(callback)
-    services.Lighting.ClockTime = callback
+world:Slider("Time of Day", 0, 24, floor(Services.Lighting.ClockTime), function(callback)
+    Services.Lighting.ClockTime = callback
 end);
-world:Colorpicker("Color Correction", services.Lighting.ColorCorrection.TintColor, function(callback)
-    services.Lighting.ColorCorrection.TintColor = callback
+world:Colorpicker("Color Correction", Services.Lighting.ColorCorrection.TintColor, function(callback)
+    Services.Lighting.ColorCorrection.TintColor = callback
 end);
 
 local other = visuals:Section("Other");
@@ -1113,6 +1026,13 @@ other:Toggle("Bullet Tracers", espSettings.bullet_tracers, function(callback)
     espSettings.bullet_tracers = callback
 end):Colorpicker(espSettings.bullet_tracer_color, function(callback)
     espSettings.bullet_tracer_color = callback
+end);
+other:Toggle("Auto Deploy", characterSettings.auto_deploy, function(callback)
+    characterSettings.auto_deploy = callback
+    if (trampoline_call(globalStuff.IsAlive, globalStuff, localPlayer) == nil) then
+        -- trampoline_call(Network.InvokeServer, Network, "Deploy");
+        trampoline_call(Deploy);
+    end
 end);
 other:Toggle("Third Person", characterSettings.third_person, function(callback)
     characterSettings.third_person = callback
@@ -1209,8 +1129,8 @@ gunMods:Toggle("No Recoil", gunmodSettings.no_recoil, function(callback)
     gunmodSettings.no_recoil = callback
     updateWeaponSettings();
 end);
-gunMods:Toggle("No Weapon Shake", gunmodSettings.no_wep_shake, function(callback)
-    gunmodSettings.no_wep_shake = callback
+gunMods:Toggle("No Weapon Inaccuracy", gunmodSettings.accurate, function(callback)
+    gunmodSettings.accurate = callback
     updateWeaponSettings();
 end);
 gunMods:Toggle("Instant Scope", gunmodSettings.instant_scope, function(callback)
@@ -1230,7 +1150,7 @@ movement:Toggle("Bhop", movementSettings.bhop, function(callback)
 end);
 movement:Toggle("Fly", false, function(callback)
     if (callback) then
-        flyChar(currentCamera, aliveCharacters[localPlayer].Root, 5);
+        flyChar(currentCamera, aliveCharacters[localPlayer].HumanoidRootPart, 5);
     else
         flying = false
     end
