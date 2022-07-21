@@ -91,11 +91,13 @@ local tp_to = function(pos)
     local char = LocalPlayer.Character
     if (not char) then return; end
     local root = char:FindFirstChild("HumanoidRootPart");
+    if (not root) then return; end
     root.Anchored = true
     wait();
     root.CFrame = pos
     wait();
     root.Anchored = false
+    return root;
 end
 
 local serverhop = function(order)
@@ -170,15 +172,54 @@ local farming = main:Section("Farming");
 
 local mobs = Workspace:FindFirstChild("Mobs");
 local Bosses = mobs:FindFirstChild("Bosses");
-local bosses = {};
+local bosses = {
+    "All (Rotation)"
+};
 
-for i, boss in pairs(Bosses:GetChildren())
+for i, boss in pairs(Bosses:GetChildren()) do
+    if (boss.ClassName == "Folder") then
+        boss = boss:FindFirstChildOfClass("Configuration");
+    end
+    local bossModel = boss:FindFirstChildOfClass("Model");
+    if (bossModel) then
+        bosses[#bosses+1] = bossModel.Name
+    end
+end
 
-farming:Slider("Select Boss");
+local bossSlider = farming:Dropdown("Select Boss", bosses[1], bosses, function(callback)
+    print(callback);
+end);
 
+Bosses.ChildRemoved:Connect(function(boss)
+    table.remove(bosses, table.find(bosses, boss:FindFirstChildOfClass("Model").Name));
+    bossSlider:Update();
+end);
 Bosses.ChildAdded:Connect(function(boss)
+    bosses[#bosses + 1] = boss:FindFirstChildOfClass("Model").Name
+    bossSlider:Update();
+end);
 
-end)
+farming:Toggle("Farm Boss", false, function(callback)
+
+end);
+farming:Toggle("Auto Equip", false, function(callback)
+
+end);
+farming:Toggle("Auto Collect", false, function(callback)
+
+end);
+
+local weapons = {};
+for i, weapon in pairs(LocalPlayer.Backpack:GetChildren()) do
+    if (weapon:FindFirstChild("Mastery_Equipped")) then
+        weapons[#weapons + 1] = weapon.Name
+    end
+end
+
+farming:Dropdown("Select Weapon", weapons, {}, function(callback)
+
+end);
+
 
 local shop = main:Section("Server Hop");
 shop:Button("Smallest Server", function()
@@ -187,9 +228,6 @@ end);
 shop:Button("Other Server", function()
     serverhop("Desc");
 end);
-
-
-
 
 local teleports = m:Tab("Teleports");
 
@@ -223,10 +261,17 @@ other:Button("Muzan", function()
     end
 end);
 
+local anchored = false
 other:Button("Spider Lily", function()
+    if (anchored) then
+        tp_to(anchored);
+    end
     local DemonFlowers = Workspace:FindFirstChild("Demon_Flowers_Spawn");
     local DemonFlower = DemonFlowers:FindFirstChild("Demon_Flower");
     if (DemonFlower) then
-        -- tp_to(DemonFlower.);
+        local pos = DemonFlower:GetBoundingBox();
+        local hrp, oldpos = tp_to(pos);
+        hrp.Anchored = true
+        anchored = oldpos
     end
 end);

@@ -56,7 +56,7 @@ local settings = {
         Y = 10,
         Z = 0,
     },
-    tool = "Black Leg",
+    tool = "Combat",
 	auto_third = false,
 	auto_second = false
 };
@@ -298,14 +298,14 @@ local questOrder = {
 		questName = "SkyQuest"
 	},
 	{
-		levels = { 176, 225 },
+		levels = { 176, 250 },
 		NPCName = "Dark Master",
 		questNumber = 2,
 		questPosition = { -4841, 717, -2623 },
 		questName = "SkyQuest"
 	},
 	{
-		levels = { 226, 275 },
+		levels = { 251, 275 },
 		NPCName = "Toga Warrior",
 		questNumber = 1,
 		questPosition = { -1576, 7, -2983 },
@@ -678,14 +678,34 @@ local startQuest = function()
     local root = findFirstChild(char, "HumanoidRootPart");
     local oldPos = root.CFrame
     local distance = (root.Position - questPosition.Position).Magnitude
+	local spawnSet = false
+	local lvl = forcelvl or LocalPlayer.Data.Level.Value
+	if (376 <= lvl and 450 >= lvl) then
+		print("true in bounds");
+		local portal = Workspace._WorldOrigin.PlayerSpawns.Pirates.Fishman:GetBoundingBox();
+		local portalDist = (oldPos.Position - portal.Position).Magnitude
+		local exitPortal = workspace.Map.TeleportSpawn.Exit.CFrame
+		local exitPortalDist = (oldPos.Position - exitPortal.Position).Magnitude
+		if ((portalDist >= 3000 or portalDist <= 500) and (oldPos.Position - questPosition.Position).Magnitude >= 1000) then
+			print("tping to portal fishman");
+			tweento(portal);
+			for i = 1, 10 do commF:InvokeServer("SetSpawnPoint"); wait() end
+			spawnSet = true
+			wait(3);
+		end
+	elseif (lvl == 450) then
+		LocalPlayer.Character:BreakJoints();
+		LocalPlayer.CharacterAdded:Wait():WaitForChild("HumanoidRootPart");
+	end
     tweento(questPosition);
     if (distance > 1000) then
         wait();
-        for i = 1, 10 do commF:InvokeServer("SetSpawnPoint"); wait() end
+        if (not spawnSet) then
+			print("setting dumb spawn");
+			for i = 1, 10 do commF:InvokeServer("SetSpawnPoint"); wait() end
+		end
     end
     commF:InvokeServer("StartQuest", questInfo.questName, questInfo.questNumber);
-    wait(.3);
-    tweento(oldPos, true);
 end
 
 local questActive = function()
@@ -697,7 +717,7 @@ end
 
 local activeQuestData = function()
     local active, questUI = questActive();
-    if (not active) then startQuest(); task.wait(.1); active, questUI = questActive(); end
+    if (not active) then commF:InvokeServer("AbandonQuest"); wait(); startQuest(); wait(.1); active, questUI = questActive(); end
     local questTitle = questUI:FindFirstChild("QuestTitle", true);
     if (questTitle) then
         local title = questTitle:FindFirstChild("Title");
@@ -921,8 +941,58 @@ end);
 autoFarm:Toggle("Fast Attack", settings.fast_attack, function(callback)
     settings.fast_attack = callback
 end);
+local tools = {};
+for i, tool in pairs(LocalPlayer.Backpack:GetChildren()) do
+	if (tool:IsA("Tool") and tool:FindFirstChild("Tool")) then
+		tools[#tools + 1] = tool.Name
+	end
+end
+for i, tool in pairs(LocalPlayer.Character:GetChildren()) do
+	if (tool:IsA("Tool") and tool:FindFirstChild("Tool")) then
+		tools[#tools + 1] = tool.Name
+	end
+end
+
+settings.tool = tools[1]
+local weapons = autoFarm:Dropdown("Weapon", tools[1], tools, function(callback)
+	settings.tool = callback
+end);
+
+
 autoFarm:Slider("Distance Y", 5, 20, settings.offsets.Y, function(callback)
     settings.offsets.Y = callback
+end);
+
+local collectChests = function(safe)
+	for i, v in pairs(Workspace:GetChildren()) do
+		if (string.sub(v.Name, 1, 5) == "Chest") then
+			local char = LocalPlayer.Character
+			if (not char) then
+				char = LocalPlayer.CharacterAdded:Wait();
+			end
+			local root = char:WaitForChild("HumanoidRootPart", 10);
+			if (not root) then
+				break;
+			end
+			repeat
+				root.CFrame = v.CFrame
+				char:BreakJoints();
+				for i1 = 1, 3 do
+					wait();
+					firetouchinterest(v, root, true);
+					wait();
+					firetouchinterest(v, root, false);
+				end
+				wait(.1);
+			until v.Parent ~= Workspace or not root or not char;
+			wait(.1);
+			print("e")
+		end
+	end
+	print("done");
+end
+autoFarm:Button("Collect All Chests", function(callback)
+	collectChests();
 end);
 
 local autoWorld = main:Section("Auto World");
@@ -931,6 +1001,154 @@ autoWorld:Toggle("Auto Third Sea", settings.auto_third, function(callback)
 	settings.auto_third = callback
 	checksea();
 end);
+
+local autoStats = main:Section("Auto Stats");
+
+local statAmount = 50
+autoStats:Slider("Stat Amount", 0, 500, statAmount, function(callback)
+	statAmount = callback
+end);
+local statsAuto = {
+	Melee = false,
+	Defense = false,
+	Sword = false,
+	Gun = false,
+	["Blox Fruit"] = false
+};
+
+local points = LocalPlayer:WaitForChild("Data"):WaitForChild("Points")
+for stat, enabled in pairs(statsAuto) do
+	autoStats:Toggle(stat, enabled, function(callback)
+		statsAuto[stat] = callback
+	end);
+end
+
+task.spawn(function()
+	while true do
+		local currentPoints = points.Value
+		local sharing = 0
+		for stat, enabled in pairs(statsAuto) do
+			if (enabled) then
+				sharing += 1
+			end
+		end
+		local sharedAmount = sharing == 0 and 1 or math.min(currentPoints, statAmount) / sharing
+		if (currentPoints >= statAmount) then
+			for stat, enabled in pairs(statsAuto) do
+				if (enabled) then
+					commF:InvokeServer("AddPoint", stat, math.floor(sharedAmount));
+				end
+			end
+		end
+		points:GetPropertyChangedSignal("Value"):Wait();
+	end
+end);
+
+local misc = main:Section("Misc");
+
+local mainGui = LocalPlayer.PlayerGui.Main
+
+misc:Button("Open Fruit Shop", function()
+	mainGui.FruitShop.Visible = true
+end);
+misc:Button("Open Inventory", function()
+	mainGui.Inventory.Visible = true
+end);
+misc:Button("Open Fruit Inventory", function()
+	mainGui.FruitInventory.Visible = true
+end);
+misc:Button("Set Nearest Spawn", function()
+	for i = 1, 10 do commF:InvokeServer("SetSpawnPoint"); wait() end
+end);
+
+local codes = {
+    exp2x = {
+        "Enyu_is_Pro",
+        "Magicbus",
+        "Sub2Fer999",
+        "Starcodeheo",
+        "JCWK",
+        "KittGaming",
+        "Bluxxy",
+        "Sub2OfficialNoobie",
+        "TheGreatAce",
+        "Axiore",
+        "Sub2Daigrock",
+        "TantaiGaming",
+        "StrawHatMaine",
+        "SUB2GAMERROBOT_EXP1"
+    },
+    statReset = {
+        "Sub2UncleKizaru",
+        "SUB2GAMERROBOT_RESET1",
+    }
+}
+
+local currentCode = ""
+local codes_ = {};
+for codeType, codes2 in pairs(codes) do
+	for i, code in pairs(codes2) do
+		codes_[#codes_ + 1] = string.format("%s (%s)", codeType, code);
+	end
+end
+local dropdown = misc:Dropdown("Code to redeem", currentCode, codes_, function(callback)
+	local code = string.match(callback, "%b()")
+	currentCode = string.sub(code, 2, #code - 1);
+	print(currentCode);
+end);
+
+misc:Button("Redeem Code", function()
+	print(remotes.Redeem:InvokeServer(currentCode));
+end);
+
+
+local teleports = mainWindow:Tab("Teleports");
+
+local islands = teleports:Section("Island Teleports");
+
+local mapLocations = Workspace.Map:GetChildren();
+local islands_ = {};
+
+for i, location in pairs(mapLocations) do
+	if (location.ClassName == "Model") then
+		local pos = location:GetBoundingBox();
+		islands_[location.Name] = pos
+		islands:Button(location.Name, function()
+			tweento(pos)
+		end);
+	end
+end
+
+
+local lp = mainWindow:Tab("LocalPlayer");
+
+local Shop = mainWindow:Tab("Dialogues");
+
+local Trainers = Shop:Section("Trainers");
+
+
+local dialogueController = require(Services.ReplicatedStorage:WaitForChild("DialogueController"));
+local dialogues = require(Services.ReplicatedStorage:WaitForChild("DialoguesList"));
+
+local trainers = {
+	"FishmanKarate Teacher",
+	"Haki Teacher",
+	"BlackLeg Teacher",
+	"Ken Teacher"
+}
+
+for i, dialogueName in pairs(trainers) do
+	Trainers:Button(dialogueName, function()
+		dialogueController:Start(dialogues[dialogueName:gsub(" ", "")]);
+	end);
+end
+
+local other = Shop:Section("Other");
+other:Button("Black Cousin", function()
+	dialogueController:Start(dialogues.RandomFruitSeller);
+end);
+
+tweento(workspace["Barrier Fruit"].Handle.CFrame)
 
 
 while true do
