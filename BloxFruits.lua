@@ -51,12 +51,13 @@ local settings = {
     auto_farm = false,
     tween_speed = 1,
     fast_attack = false,
+	target_only_attacking = true,
     offsets = {
         X = 3,
         Y = 10,
         Z = 0,
     },
-    tool = "Combat",
+    tool = "Fishman Karate",
 	auto_third = false,
 	auto_second = false
 };
@@ -103,6 +104,50 @@ local tweento = function(pos, noyield)
     return false
 end
 
+local serverhop = function(order)
+    local Servers = {};
+    local url = string.format("https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=%s&limit=100", game.PlaceId, order);
+    local starting = tick();
+    local Server;
+    repeat
+        local good, result = pcall(function()
+            return game:HttpGet(url);
+        end);
+        if (not good) then
+            wait(2);
+            continue;
+        end
+        local decoded = Services.HttpService:JSONDecode(result);
+        if (#decoded.data ~= 0) then
+            Servers = decoded.data
+            for i, v in pairs(Servers) do
+                if (v.maxPlayers and v.playing and v.maxPlayers > v.playing) then
+                    Server = v
+                    break;
+                end
+            end
+            if (Server) then
+                break;
+            end
+        end
+        url = format("https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=%s&limit=100&cursor=%s", game.PlaceId, order, decoded.nextPageCursor);
+    until tick() - starting >= 600;
+    if (not Server or #Servers == 0) then
+        return "no servers found";
+    end
+
+    local queue_on_teleport = syn and syn.queue_on_teleport or queue_on_teleport
+    if (queue_on_teleport) then
+        queue_on_teleport("print('scripthere')");
+    end;
+
+    Services.TeleportService:TeleportToPlaceInstance(game.PlaceId, Server.id);    
+end
+
+local CombatFrameworkOld = require(LocalPlayer.PlayerScripts.CombatFramework);
+local CombatFramework = debug.getupvalue(CombatFrameworkOld, 2);
+local CameraShaker = require(ReplicatedStorage.Util.CameraShaker);
+CameraShaker:Stop();
 
 local attack = function()
     local char = LocalPlayer.Character
@@ -124,21 +169,38 @@ local attack = function()
 end
 
 
-local fastattack = function()
-    local activeController = filtergc("table", {
-        Keys = {"increment", "blocking", "attacking"}
-    }, true);
-    if (not activeController) then
-        return attack();
-    end
+RunService.RenderStepped:Connect(function()
+	local activeController = CombatFramework.activeController
 
-    activeController.attacking = false
-    activeController.blocking = false
-    activeController.timeToNextAttack = tick() - 1
-    activeController.timeToNextBlock = 0
-    -- activeController.increment = 3
-    activeController.hitboxMagnitude = 120
-    local char = attack();
+	local char = LocalPlayer.Character
+
+	if (not char or not activeController) then return; end
+	if (settings.auto_farm) then
+		activeController.hitboxMagnitude = 55
+	end
+
+	if (settings.fast_attack) then
+		if findFirstChild(char, "Black Leg") then
+			activeController.timeToNextAttack = 3
+		elseif findFirstChild(char, "Electro") then
+			activeController.timeToNextAttack = 2
+		else
+			activeController.timeToNextAttack = 0
+		end
+
+		activeController.attacking = false
+		activeController.increment = 3
+		activeController.blocking = false
+		activeController.timeToNextBlock = 0
+		char.Humanoid.Sit = false
+	end	
+end)
+
+local fastattack = function()
+	local char = LocalPlayer.Character
+	if (not char) then return; end
+    attack();
+
     local stun = findFirstChild(char, "Stun");
     if (stun) then
         stun.Value = 0
@@ -658,7 +720,7 @@ local questOrder = {
 
 local forcelvl = nil
 local getQuestInfo = function()
-    local level = forcelvl or LocalPlayer.Data.Level.Value
+    local level = forcelvl or LocalPlayer.Data.Level.Value + 1
 
     for i, questInfo in pairs(questOrder) do
         local NPClevels = questInfo.levels
@@ -679,7 +741,7 @@ local startQuest = function()
     local oldPos = root.CFrame
     local distance = (root.Position - questPosition.Position).Magnitude
 	local spawnSet = false
-	local lvl = forcelvl or LocalPlayer.Data.Level.Value
+	local lvl = forcelvl or LocalPlayer.Data.Level.Value + 1
 	if (376 <= lvl and 450 >= lvl) then
 		print("true in bounds");
 		local portal = Workspace._WorldOrigin.PlayerSpawns.Pirates.Fishman:GetBoundingBox();
@@ -756,11 +818,13 @@ local doQuest = function()
 
     local char = LocalPlayer.Character
     local attackingPosition = CFrame.new(settings.offsets.X, settings.offsets.Y, settings.offsets.Z);
-    local offset = CFrame.new(-3, -5, 0);
+    local offset = CFrame.new(-3, -(settings.offsets.Y - 5), 0);
 
     local function wakeNPC(npc, first)
         local npcHumanoid = npc:WaitForChild("Humanoid");
-        npcHumanoid.Died:Connect(function()
+        if (npcHumanoid.Health == 0 or table.find(attackingNPCs, npc)) then return; end
+
+		npcHumanoid.Died:Connect(function()
             table.remove(attackingNPCs, table.find(attackingNPCs, npc));
             wait(.1);
             if (not threadResumed and not questActive()) then
@@ -769,17 +833,6 @@ local doQuest = function()
                 for i, connection in pairs(questConnections) do
                     connection:Disconnect();
                 end
-            end
-
-            if (#attackingNPCs == 0) then
-                local aliveNPCs = getNPCsFromName(questInfo.NPCName);
-                for i = 1, currentQuestData.amountToKill - currentQuestData.killed do
-                    local _npc = aliveNPCs[i]
-                    if (_npc) then
-                        wakeNPC(_npc, i == 1);
-                    end
-                end
-                print("done lol", #attackingNPCs);
             end
         end);
         attackingNPCs[#attackingNPCs + 1] = npc
@@ -853,6 +906,16 @@ local doQuest = function()
             end
         end
 
+		if (#attackingNPCs == 0) then
+			local aliveNPCs = getNPCsFromName(questInfo.NPCName);
+			for i = 1, currentQuestData.amountToKill - currentQuestData.killed do
+				local npc = aliveNPCs[i]
+				if (npc) then
+					wakeNPC(npc, i == 1);
+				end
+			end
+		end
+
         attackingPosition = CFrame.new(settings.offsets.X, settings.offsets.Y, settings.offsets.Z);
     end);
 
@@ -863,7 +926,6 @@ local doQuest = function()
         end
     end);
 
-	
     coroutine.yield();
 	if (settings.auto_third or settings.auto_second) then
 		checksea();
@@ -908,26 +970,30 @@ checksea = function()
 
 end
 
-local getbladehits = filtergc("function", {
-    Name = "getBladeHits"
-}, true);
 
-restorefunction(getbladehits);
-
-local old;
-old = hookfunction(getbladehits, function(...)
-    if (settings.auto_farm) then
-        local torsos = {}
-        for i , v in pairs(attackingNPCs) do
-            local torso = findFirstChild(v, "UpperTorso");
-            if (torso and (characterPos - torso.Position).Magnitude < 30) then
-                torsos[#torsos + 1] = torso
+local getbladehits;
+for i, v in pairs(getgc(true)) do
+    if (type(v) == "table") then
+        local bladeHits = rawget(v, "getBladeHits");
+        if (bladeHits and type(bladeHits) == "function") then
+            local old = bladeHits
+            v.getBladeHits = function(...)
+                if (settings.auto_farm and settings.target_only_attacking) then
+                    local torsos = {}
+                    for i2 , v2 in pairs(attackingNPCs) do
+                        local torso = findFirstChild(v2, "UpperTorso");
+                        if (torso and (characterPos - torso.Position).Magnitude < 30) then
+                            torsos[#torsos + 1] = torso
+                        end
+                    end
+                    return torsos;
+                end
+                return old(...);
             end
+            break;
         end
-        return torsos;
     end
-    return old(...);
-end);
+end
 
 local mainWindow = UILibrary:CreateWindow("Fate Hub", "Blox Fruits", Color3.fromRGB(100, 0, 255));
 
@@ -941,23 +1007,46 @@ end);
 autoFarm:Toggle("Fast Attack", settings.fast_attack, function(callback)
     settings.fast_attack = callback
 end);
+autoFarm:Toggle("Only Attack NPC Target", settings.target_only_attacking, function(callback)
+	settings.target_only_attacking = callback
+end);
+
 local tools = {};
-for i, tool in pairs(LocalPlayer.Backpack:GetChildren()) do
-	if (tool:IsA("Tool") and tool:FindFirstChild("Tool")) then
-		tools[#tools + 1] = tool.Name
+local updateWeapons = function()
+	table.clear(tools);
+
+	for i, tool in pairs(LocalPlayer.Backpack:GetChildren()) do
+		if (tool:IsA("Tool") and tool.ToolTip == "Melee") then
+			tools[#tools + 1] = tool.Name
+		end
 	end
-end
-for i, tool in pairs(LocalPlayer.Character:GetChildren()) do
-	if (tool:IsA("Tool") and tool:FindFirstChild("Tool")) then
-		tools[#tools + 1] = tool.Name
+	for i, tool in pairs(LocalPlayer.Character:GetChildren()) do
+		if (tool:IsA("Tool")  and tool.ToolTip == "Melee") then
+			tools[#tools + 1] = tool.Name
+		end
 	end
+	LocalPlayer.Backpack.ChildAdded:Connect(function(tool)
+		if (tool.ToolTip == "Melee" and not table.find(tools, tool.Name)) then
+			tools[#tools + 1] = tool.Name
+		end
+	end);
+	LocalPlayer.Backpack.ChildRemoved:Connect(function(tool)
+		if (tool.ToolTip == "Melee" and table.find(tools, tool.Name)) then
+			table.remove(tools, table.find(tools, tool.Name));
+		end
+	end);
 end
 
+
+updateWeapons();
 settings.tool = tools[1]
 local weapons = autoFarm:Dropdown("Weapon", tools[1], tools, function(callback)
 	settings.tool = callback
 end);
-
+autoFarm:Button("Refresh Weapons", function()
+	updateWeapons();
+	weapons:UpdateList(tools);
+end);
 
 autoFarm:Slider("Distance Y", 5, 20, settings.offsets.Y, function(callback)
     settings.offsets.Y = callback
@@ -979,9 +1068,9 @@ local collectChests = function(safe)
 				char:BreakJoints();
 				for i1 = 1, 3 do
 					wait();
-					firetouchinterest(v, root, true);
+					firetouchinterest(v, root, 0);
 					wait();
-					firetouchinterest(v, root, false);
+					firetouchinterest(v, root, 1);
 				end
 				wait(.1);
 			until v.Parent ~= Workspace or not root or not char;
@@ -1013,7 +1102,7 @@ local statsAuto = {
 	Defense = false,
 	Sword = false,
 	Gun = false,
-	["Blox Fruit"] = false
+	["Demon Fruit"] = false
 };
 
 local points = LocalPlayer:WaitForChild("Data"):WaitForChild("Points")
@@ -1044,13 +1133,130 @@ task.spawn(function()
 	end
 end);
 
+local autoTrain = main:Section("Auto Train");
+
+local autoTrainining = {
+	buso = false,
+	observation = false
+}
+autoTrain:Toggle("Auto Train Buso", false, function(callback)
+	autoTrainining.buso = callback
+end);
+autoTrain:Toggle("Auto Train Observation", false, function(callback)
+	autoTrainining.observation = callback
+end);
+
+task.spawn(function()
+	while true do
+		local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait();
+		char:WaitForChild("Humanoid");
+		char:WaitForChild("HumanoidRootPart");
+		wait(.1);
+		if (autoTrainining.buso) then
+			if (not char:FindFirstChild("HasBuso")) then
+				commF:InvokeServer("Buso");
+			end
+		end
+		if (autoTrainining.observation) then
+
+		end
+		wait();
+	end
+end);
+
 local misc = main:Section("Misc");
+misc:SetRight();
+
+local doSaberQuest = false
+local function startSaberQuest()
+	local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait();
+	local root = char:WaitForChild("HumanoidRootPart");
+	local locations = Workspace._WorldOrigin.Locations
+	local map = workspace.Map
+	local jungle = locations.Jungle
+	local jungleIsland = map.Jungle
+
+	local progress = commF:InvokeServer("ProQuestProgress");
+	local platesDone = true
+	for i, plateDone in pairs(progress.Plates) do
+		if (not plateDone) then
+			platesDone = false
+		end
+	end
+	local torchUsed = progress.UsedTorch
+
+	local cupUsed = progress.UsedCup
+
+	local questPlates = Workspace.Map.Jungle:WaitForChild("QuestPlates");
+	if (not platesDone) then
+		tweento(jungle.CFrame * CFrame.new(0, 150, 0));
+		for i, plate in pairs(questPlates:GetChildren()) do
+			local plateButton = plate:FindFirstChild("Button");
+			if (plateButton) then
+				tweento(plateButton.CFrame);
+				firetouchinterest(plateButton, root, 0);
+				wait();
+				firetouchinterest(plateButton, root, 1);
+			end
+		end		
+		wait();
+		return startSaberQuest();
+	end
+	
+	if (not torchUsed) then
+		local door = questPlates.Door
+		tweento(door.CFrame);
+			
+		local torch = jungleIsland.Torch
+		repeat
+			firetouchinterest(torch, root, 0);
+			wait();
+			firetouchinterest(torch, root, 1);
+			wait(.1);
+		until LocalPlayer.Backpack:FindFirstChild("Torch") or char:FindFirstChild("Torch");
+		tweento(desert.CFrame * CFrame.new(0, 150, 0));
+		tweento(CFrame.new(1115, 4, 4349));
+		local torch = LocalPlayer.Backpack:FindFirstChild("Torch") or char:FindFirstChild("Torch");
+		torch.Parent = char
+		local burn = desertIsland:FindFirstChild("Burn");
+		local fire = burn:FindFirstChild("Fire");
+
+		fire:GetPropertyChangedSignal("CanCollide"):Wait();
+		return startSaberQuest();
+	end
+
+	if (not cupUsed) then
+		if (not LocalPlayer.Backpack:FindFirstChild("Cup") and not char:FindFirstChild("Cup")) then
+			tweento(CFrame.new(1110, 4, 4362));
+			local cup = desertIsland:FindFirstChild("Cup")
+			repeat
+				firetouchinterest(cup, root, 0);
+				wait();
+				firetouchinterest(cup, root, 1);
+				wait(.1);
+			until LocalPlayer.Backpack:FindFirstChild("Cup") or char:FindFirstChild("Cup");
+		end
+		tweento(CFrame.new(1395, 37, -1321));
+		local cup = LocalPlayer.Backpack:FindFirstChild("Cup") or char:FindFirstChild("Cup");
+		cup.Parent = char
+		wait(1);
+		commF:InvokeServer("ProQuestProgress", "FillCup", cup);
+		wait(1);
+		tweento(CFrame.new(1455, 88, -1388));
+		commF:InvokeServer("ProQuestProgress", "SickMan");
+		return startSaberQuest();
+	end
+
+	print"true";
+end
+
+misc:Toggle("Do Saber Quest", false, function(callback)
+	doSaberQuest = callback
+	startSaberQuest();
+end);
 
 local mainGui = LocalPlayer.PlayerGui.Main
 
-misc:Button("Open Fruit Shop", function()
-	mainGui.FruitShop.Visible = true
-end);
 misc:Button("Open Inventory", function()
 	mainGui.Inventory.Visible = true
 end);
@@ -1106,50 +1312,178 @@ local teleports = mainWindow:Tab("Teleports");
 
 local islands = teleports:Section("Island Teleports");
 
-local mapLocations = Workspace.Map:GetChildren();
+local setspawnTP = false
+islands:Toggle("Set Spawn TP", false, function(callback)
+	setspawnTP = callback
+end);
+
+local mapLocations = Workspace._WorldOrigin.Locations:GetChildren();
 local islands_ = {};
 
 for i, location in pairs(mapLocations) do
-	if (location.ClassName == "Model") then
-		local pos = location:GetBoundingBox();
-		islands_[location.Name] = pos
-		islands:Button(location.Name, function()
-			tweento(pos)
+	if (location:IsA("Part")) then
+		local locationName = location.Name
+		if (islands_[locationName]) then
+			local n = 1
+			local newName
+			repeat
+				newName = string.format("%s (%s)", locationName, n);
+				n += 1
+			until not islands_[newName]
+			locationName = newName
+		end
+
+		local pos = location.CFrame
+		islands_[locationName] = pos * CFrame.new(0, 150, 0);
+		islands:Button(locationName, function()
+			if (setspawnTP) then
+				local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait();
+				local root = char:WaitForChild("HumanoidRootPart");
+				root.CFrame = pos
+				char:BreakJoints();
+				for i = 1, 10 do commF:InvokeServer("SetSpawnPoint"); wait() end
+			else
+				tweento(pos);
+			end
 		end);
 	end
 end
 
+local servers = teleports:Section("Servers");
+
+servers:Button("Server Hop Largest", function()
+	serverhop("Desc")
+end);
+servers:Button("Server Hop Smallest", function()
+	serverhop("Asc");
+end);
+servers:Button("Rejoin Server", function()
+	Services.TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId);
+end);
 
 local lp = mainWindow:Tab("LocalPlayer");
 
-local Shop = mainWindow:Tab("Dialogues");
+local Shop = mainWindow:Tab("Shop");
 
-local Trainers = Shop:Section("Trainers");
+local Fruits = Shop:Section("Fruits");
+Fruits:Button("Open Fruit Shop", function()
+	mainGui.FruitShop.Visible = true
+end);
+Fruits:Button("Buy Cousin Fruit", function()
+	print(commF:InvokeServer("Cousin", "Buy"));
+end);
 
-
-local dialogueController = require(Services.ReplicatedStorage:WaitForChild("DialogueController"));
-local dialogues = require(Services.ReplicatedStorage:WaitForChild("DialoguesList"));
-
-local trainers = {
-	"FishmanKarate Teacher",
-	"Haki Teacher",
-	"BlackLeg Teacher",
-	"Ken Teacher"
+local abilitiesInfo = {
+	{ "10,000", "BuyHaki", "Geppo" },
+	{ "25,000", "BuyHaki", "Buso" },
+	{ "100,000", "BuyHaki", "Soru" },
+	{ "750,000", "KenTalk", "Buy" },
 }
 
-for i, dialogueName in pairs(trainers) do
-	Trainers:Button(dialogueName, function()
-		dialogueController:Start(dialogues[dialogueName:gsub(" ", "")]);
+local Abilities = Shop:Section("Abilities");
+
+for i, abilityInfo in ipairs(abilitiesInfo) do
+	Abilities:Button(string.format("Buy %s ($%s)", abilityInfo[3] == "Buy" and "Observation Haki" or abilityInfo[3], abilityInfo[1]), function()
+		commF:InvokeServer(unpack(abilityInfo, 2));
 	end);
 end
 
-local other = Shop:Section("Other");
-other:Button("Black Cousin", function()
-	dialogueController:Start(dialogues.RandomFruitSeller);
+local stylesInfo = {
+	{ "150,000", "Black Leg" },
+	{ "500,000", "Electro" },
+	{ "750,000", "Fishman Karate" },
+	{ "2,500,000", "Sharkman  Karate" },
+	{ "2,500,000", "Death Step" },
+	{ "3,000,000", "Electric Claw" },
+	{ "3,000,000", "Dragon Talon" },
+	{ "3,000,000", "Super Human" },
+	{ "(f)1,500", "Dragon Breath" }
+}
+local Styles = Shop:Section("Fighting Styles");
+
+for i, styleInfo in ipairs(stylesInfo) do
+	Styles:Button(string.format("Buy %s (%s)", styleInfo[2], styleInfo[1]), function()
+		commF:InvokeServer("Buy" .. styleInfo[2]:gsub(" ", ""));
+	end);
+end
+
+local swordsInfo = {
+	{ "1,000", "Katana" },
+	{ "1,000","Cutlass" },
+	{ "12,000", "Dual Katana" },
+	{ "25,000", "Iron Mace" },
+	{ "60,000", "Triple Katana" },
+	{ "100,000", "Pipe" },
+	{ "400,000", "Dual-Headed Blade" },
+	{ "750,000", "Soul Cane" },
+	{ "1,200,000", "Bisento" },
+};
+
+local Swords = Shop:Section("Swords");
+
+for i, swordInfo in ipairs(swordsInfo) do
+	Swords:Button(string.format("Buy %s (%s)", swordInfo[2], swordInfo[1]), function()
+		commF:InvokeServer("BuyItem", swordInfo[2]);
+	end);
+end
+Swords:Button("Buy Pole V2 ((f)5,000)", function()
+	commF:InvokeServer("ThunderGodTalk");
 end);
 
-tweento(workspace["Barrier Fruit"].Handle.CFrame)
+local gunsInfo = {
+	{ "5,000", "Slingshot" },
+	{ "8,000", "Musket" },
+	{ "30,000", "Refined Slingshot" },
+	{ "65,000", "Refined Flintlock" },
+	{ "100,500", "Flintlock" },
+}
+local Guns = Shop:Section("Guns");
 
+for i, gunInfo in pairs(gunsInfo) do
+	Guns:Button(string.format("Buy %s (%s)", gunInfo[2], gunInfo[1]), function()
+		commF:InvokeServer("BuyItem", gunInfo[2]);
+	end);
+end
+Guns:Button("Buy Kabucha ((f)1,500", function()
+	commF:InvokeServer("BlackbeardReward", "Slingshot", "2");
+end);
+
+local accessoriesInfo = {
+	{ "50,000", "Black Cape" },
+	{ "150,000", "Swordsman Hat" },
+	{ "500,000", "Tomoe Ring" }
+};
+local Accessories = Shop:Section("Accessories");
+
+for i, accessoryInfo in pairs(accessoriesInfo) do
+	Accessories:Button(string.format("Buy %s (%s)", accessoryInfo[2], accessoryInfo[1]), function()
+		commF:InvokeServer("BuyItem", accessoryInfo[2]);
+	end);
+end
+
+
+-- local Trainers = Shop:Section("Trainer Dialogues");
+
+-- local dialogueController = require(Services.ReplicatedStorage:WaitForChild("DialogueController"));
+-- local dialogues = require(Services.ReplicatedStorage:WaitForChild("DialoguesList"));
+
+-- local trainers = {
+-- 	"FishmanKarate Teacher",
+-- 	"Haki Teacher",
+-- 	"BlackLeg Teacher",
+-- 	"Ken Teacher"
+-- }
+
+-- for i, dialogueName in pairs(trainers) do
+-- 	Trainers:Button(dialogueName, function()
+-- 		dialogueController:Start(dialogues[dialogueName:gsub(" ", "")]);
+-- 	end);
+-- end
+
+-- local other = Shop:Section("Other");
+-- other:Button("Black Cousin", function()
+-- 	dialogueController:Start(dialogues.RandomFruitSeller);
+-- end);
 
 while true do
     if (settings.auto_farm) then

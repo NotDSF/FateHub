@@ -221,11 +221,11 @@ farming:Dropdown("Select Weapon", weapons, {}, function(callback)
 end);
 
 
-local shop = main:Section("Server Hop");
-shop:Button("Smallest Server", function()
+local sHop = main:Section("Server Hop");
+sHop:Button("Smallest Server", function()
     serverhop("Asc");
 end);
-shop:Button("Other Server", function()
+sHop:Button("Other Server", function()
     serverhop("Desc");
 end);
 
