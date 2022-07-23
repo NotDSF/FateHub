@@ -215,7 +215,7 @@ local function UiElements(Section, SectionTable, Ret)
 
             HexValue.Text = '  #' .. Clr:ToHex();
 
-            Callback(Clr);
+            task.spawn(Callback, Clr);
             StatusColor.BackgroundColor3 = Clr
             ColorTrack = Clr
         end
@@ -411,14 +411,14 @@ local function UiElements(Section, SectionTable, Ret)
             InputBegan = UserInputService.InputBegan:Connect(function(input, gp)
                 if input.UserInputType == Enum.UserInputType.Keyboard and not gp then
                     Ret.KeyStr = tostring(input.KeyCode)
-                    setCallback(input.KeyCode)
+                    settask.spawn(Callback, input.KeyCode)
                     CurrentKey.Text = string.format('[%s]', string.split(tostring(input.KeyCode), '.')[3])
                     InputBegan:Disconnect()
                     task.wait()
                     Ret.KeyTrack = input.KeyCode
                 elseif table.find(MouseInputs, input.UserInputType) and not gp then
                     Ret.KeyStr = tostring(input.UserInputType)
-                    setCallback(input.UserInputType)
+                    settask.spawn(Callback, input.UserInputType)
                     CurrentKey.Text = string.format('[%s]', string.split(tostring(input.UserInputType), '.')[3])
                     InputBegan:Disconnect()
                     task.wait()
@@ -442,7 +442,7 @@ local function UiElements(Section, SectionTable, Ret)
         function Ret:UpdateBind(newBind)
             Ret.KeyTrack = newBind
             Ret.KeyStr = tostring(newBind)
-            setCallback(newBind)
+            settask.spawn(Callback, newBind)
             CurrentKey.Text = string.format('[%s]', string.split(tostring(newBind), '.')[3])
         end
         function Ret:UpdateTitle(newTitle) Title.Text = newTitle end
@@ -492,7 +492,7 @@ local function UiElements(Section, SectionTable, Ret)
         Title.InputBegan:Connect(function(key)
             if (key.UserInputType == Enum.UserInputType.MouseButton1) then
                 Toggle = not Toggle
-                Callback(Toggle)
+                task.spawn(Callback, Toggle)
                 Ret.Toggle = Toggle
 
                 TweenService:Create(Status, TweenInfo.new(0.2), {
@@ -506,7 +506,7 @@ local function UiElements(Section, SectionTable, Ret)
         Status.InputBegan:Connect(function(key)
             if (key.UserInputType == Enum.UserInputType.MouseButton1) then
                 Toggle = not Toggle
-                Callback(Toggle)
+                task.spawn(Callback, Toggle)
                 Ret.Toggle = Toggle
                 TweenService:Create(Status, TweenInfo.new(0.2), {
                     BackgroundColor3 = (Ret.Toggle and Colorscheme or fromRGB(22, 22, 22))
@@ -523,7 +523,7 @@ local function UiElements(Section, SectionTable, Ret)
             else
                 Ret.Toggle = not Ret.Toggle
             end
-            Callback(Ret.Toggle)
+            task.spawn(Callback, Ret.Toggle)
 
             TweenService:Create(Status, TweenInfo.new(0.2), {
                 BackgroundColor3 = (Ret.Toggle and Colorscheme or fromRGB(22, 22, 22))
@@ -634,7 +634,7 @@ local function UiElements(Section, SectionTable, Ret)
                 Title.Parent = Button
 
                 Button.MouseButton1Click:Connect(function()
-                    Callback(v)
+                    task.spawn(Callback, v)
                     DropButton.Text = tostring(v)
                     LastSelected = Button
                     Ret.Selected = v
@@ -703,7 +703,7 @@ local function UiElements(Section, SectionTable, Ret)
         function Ret:UpdateTitle(newTitle) Title.Text = newTitle end
         function Ret:UpdateSelected(newSelected)
             DropButton.Text = tostring(newSelected)
-            Callback(newSelected)
+            task.spawn(Callback, newSelected)
         end
 
         SectionTable[Name] = Ret
@@ -767,7 +767,7 @@ local function UiElements(Section, SectionTable, Ret)
                 local Value = (Ratio * Range) + Min; Ret.SlideValue = Value
                 Title.Text = format('<font color="rgb(200, 200, 200)">%s</font> <font color="rgb(40, 40, 40)"> | </font> %s', Name, floor(Value))
 
-                Callback(FloorCallback and floor(Value) or Value)
+                task.spawn(Callback, FloorCallback and floor(Value) or Value)
                 Slider:TweenSizeAndPosition(
                     UDim2_fromOffset(noFill and 2 or Ratio * Size, 10),
                     UDim2_fromOffset(noFill and Ratio * Size or 0, 20),
@@ -781,7 +781,7 @@ local function UiElements(Section, SectionTable, Ret)
                     local Ratio = clamp((Mouse.X - Position) / Size, 0, 1)
                     local Value = (Ratio * Range) + Min; SlideValue = Value
 
-                    Callback(FloorCallback and floor(Value) or Value)
+                    task.spawn(Callback, FloorCallback and floor(Value) or Value)
 
                     Title.Text = format('<font color="rgb(200, 200, 200)">%s</font> <font color="rgb(40, 40, 40)"> | </font> %s', Name, floor(Value))
                     Slider:TweenSizeAndPosition(
@@ -806,7 +806,7 @@ local function UiElements(Section, SectionTable, Ret)
         function Ret:UpdateValue(newValue)
             assert(clamp(newValue, Min, Max) == newValue, 'Value is not in range')
 
-            Callback(newValue)
+            task.spawn(Callback, newValue)
 
             local Size = SliderBounds.AbsoluteSize.X
             local Ratio = (newValue - Min) / Range
@@ -908,14 +908,14 @@ local function UiElements(Section, SectionTable, Ret)
 
         InputBox:GetPropertyChangedSignal('Text'):Connect(function()
             Ret.CurrentInput = InputBox.Text
-            Callback(InputBox.Text)
+            task.spawn(Callback, InputBox.Text)
         end)
 
         function Ret:UpdateTitle(newTitle) Title.Text = newTitle end
         function Ret:UpdateInput(newInput)
             InputBox.Text = newInput;
             Ret.CurrentInput = newInput
-            Callback(newInput)
+            task.spawn(Callback, newInput)
         end
 
         SectionTable[Name] = Ret
@@ -941,7 +941,7 @@ local function UiElements(Section, SectionTable, Ret)
         local Ret = {}
 
         Button.MouseButton1Click:Connect(function()
-            Callback();
+            task.spawn(Callback, );
             Button.TextColor3 = Colorscheme
             Button.BackgroundColor3 = fromRGB(15, 15, 15);
             TweenService:Create(Button, TweenInfo.new(.7), {
