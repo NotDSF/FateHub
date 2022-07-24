@@ -1,3 +1,5 @@
+-- yes  i am gonna rewrite this, i am just rushing it all
+
 local RunService = game:GetService("RunService")
 local UILibrary = loadfile("UILibrary.lua")();
 local VisualsLib = loadfile("Visuals.lua")();
@@ -75,6 +77,7 @@ local settings = {
 	auto_snipe_fruits = false,
 
 	character = {},
+	cooldowns = {}
 };
 
 local trampoline_call = function(func, ...)
@@ -126,6 +129,14 @@ __newindex = hookmetamethod(game, "__newindex", function(self, prop, val)
 		end
     end
     return __newindex(self, prop, val);
+end);
+
+local __index, energyValue;
+__index = hookmetamethod(game, "__index", function(self, prop)
+	if (not checkcaller() and self == energyValue and prop == "Value") then
+		return __index(self, "MaxValue");
+	end
+	return __index(self, prop);
 end);
 
 local protectInstance = function(instance)
@@ -705,7 +716,7 @@ local attack = function()
     if (char) then
         equipT(char, settings.tool);
         local connections = getconnections(Mouse.Button1Down);
-        if (connections[1]) then
+        if (connections[1] and connections[1].Function) then
             connections[1].Function();
         end
     end
@@ -773,7 +784,6 @@ local skillAttack = function(npcHum, d)
 			if (not toolEquipped) then
 				toolEquipped = equipT(LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait(), settings.auto_skill_wep);
 			end
-			wait(.1);
 			if (not toolEquipped) then
 				table.remove(d, table.find(d, npc));
 				break;
@@ -787,14 +797,13 @@ local skillAttack = function(npcHum, d)
 			until not cooldownClient;
 
 			equipT(char, settings.auto_skill_wep);
-			wait(.1);
+
 			if (not cooldownClient and enabled) then
 				keyPress(skill);
 				wait(settings.auto_skill_hold);
 				keyRelease(skill);
 			end
 		end
-		wait(.3);
 	until npcHum.Health == 0 or npcHum.Parent == nil or not table.find(d, npc);
 
 	table.remove(d, table.find(d, npc));
@@ -812,7 +821,7 @@ local getNPCsFromName = function(find)
     local found = {};
     for i = 1, #enemiesChildren do
         local enemy = enemiesChildren[i]
-        if (string.find(enemy.Name, find)) then
+        if (string.find(enemy.Name, find) or enemy.Name == find) then
             local root = findFirstChild(enemy, "HumanoidRootPart");
             if (root and not root.Anchored) then
                 found[#found + 1] = {enemy, (localPos - root.Position).Magnitude};
@@ -999,11 +1008,13 @@ local attackNPCs = function(thread, NPCName, fakeQuest)
     local function wakeNPC(npc, first)
         local npcHumanoid = npc:WaitForChild("Humanoid");
         if (npcHumanoid.Health == 0 or table.find(attackingNPCs, npc)) then return; end
-
+		print("waking npc");
 		npcHumanoid.Died:Connect(function()
             table.remove(attackingNPCs, table.find(attackingNPCs, npc));
             wait(.1);
-            if (not threadResumed and not questActive()) then
+			print("killed");
+            if (fakeQuest or (not threadResumed and not questActive())) then
+				print("resumed!!");
                 coroutine.resume(thread);
                 threadResumed = true
                 for i, connection in pairs(questConnections) do
@@ -1050,7 +1061,7 @@ local attackNPCs = function(thread, NPCName, fakeQuest)
 	local qInfo = getQuestInfo();
 	local qPosition = vector3new(unpack(qInfo.questPosition));
     questConnections[#questConnections + 1] = RunService.Heartbeat:Connect(function()
-        if (not settings.auto_farm and not fakeQuest) then
+		if (not settings.auto_farm and not fakeQuest or force) then
             coroutine.resume(thread);
             threadResumed = true
             for i, connection in pairs(questConnections) do
@@ -1118,7 +1129,7 @@ local attackNPCs = function(thread, NPCName, fakeQuest)
 
     questConnections[#questConnections + 1] = enemies.ChildAdded:Connect(function(npc)
         local npcName = npc.Name
-        if (string.find(npcName, NPCName)) then
+        if (string.find(npcName, NPCName) or npcName == NPCName) then
 			repeat wait(); until not tweening
             wakeNPC(npc);
         end
@@ -1169,7 +1180,27 @@ local doQuest = function()
 	end
 end
 
-local doSaberQuest = false
+local doBoss = function()
+	local bossName = settings.boss_name
+
+	local thread = coroutine.running();
+	local found = false
+	for i, enemy in pairs(enemies:GetChildren()) do
+		local hum = enemy:FindFirstChild("Humanoid");
+		if (enemy.Name == bossName and hum and hum.Health ~= 0) then
+			found = true
+		end
+	end
+
+
+	if (found) then
+		print("attacking ".. bossName);
+		attackNPCs(thread, bossName, true);
+		coroutine.yield();
+	end
+end
+
+
 local function startSaberQuest()
 	local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait();
 	local root = char:WaitForChild("HumanoidRootPart");
@@ -1417,6 +1448,43 @@ autoFarm:Toggle("Only Attack NPC Target", settings.target_only_attacking, functi
 end);
 autoFarm:Toggle("Auto Skill", settings.auto_skill, function(callback)
 	settings.auto_skill = callback
+end);
+
+autoFarm:Toggle("Auto Boss", settings.auto_farm_boss, function(callback)
+	settings.auto_farm_boss = callback
+	if (not callback) then
+		force = true
+		wait(.1);
+		force = false
+	end
+end);
+local enemiesT = {};
+for i, enemy in pairs(enemies:GetChildren()) do
+	if (string.find(enemy.Name, "Boss")) then
+		enemiesT[#enemiesT + 1] = enemy.Name
+	end
+end
+settings.boss_name = enemiesT[1]
+local drop = autoFarm:Dropdown("Select Boss", enemiesT[1], enemiesT, function(callback)
+	settings.boss_name = callback
+end);
+enemies.ChildAdded:Connect(function(enemy)
+	table.clear(enemiesT);
+	for i, enemy in pairs(enemies:GetChildren()) do
+		if (string.find(enemy.Name, "Boss")) then
+			enemiesT[#enemiesT + 1] = enemy.Name
+		end
+	end
+	drop:UpdateList(enemiesT);
+end);
+enemies.ChildRemoved:Connect(function(enemy)
+	table.clear(enemiesT);
+	for i, enemy in pairs(enemies:GetChildren()) do
+		if (string.find(enemy.Name, "Boss")) then
+			enemiesT[#enemiesT + 1] = enemy.Name
+		end
+	end
+	drop:UpdateList(enemiesT);
 end);
 
 autoFarm:Slider("Distance Y", 5, 20, settings.offsets.Y, function(callback)
@@ -1858,11 +1926,36 @@ end);
 
 local Players = lp:Section("Players");
 
-local Cooldowns = lp:Section("Cooldowns");
+local Other = lp:Section("Other");
+
+local cooldownT = {};
+Other:Toggle("No Geppo Cooldown", false, function(callback)
+	settings.cooldowns.geppo = callback
+end);
+Other:Toggle("No Dodge Cooldown", false, function(callback)
+	settings.cooldowns.dodge = callback
+end);
+Other:Toggle("No Soru Cooldown", false, function(callback)
+	settings.cooldowns.soru = callback
+end);
+Other:Toggle("Infinite Energy", false, function(callback)
+	settings.character.energy = callback
+end);
+Other:Toggle("Infinite Geppo", false, function(callback)
+	settings.character.infgeppo = callback
+end);
+
+local refresh = function(character)
+	local geppoScript = character:WaitForChild("Geppo");
+	local dodgeScript = character:WaitForChild("Dodge");
+	local soruScript = character:WaitForChild("Soru");
+	energyValue = character:WaitForChild("Energy");
 
 
-
-
+	cooldownT.geppo = debug.getupvalue(debug.getproto(getscriptclosure(geppoScript), 2, true)[1], 8);
+	cooldownT.dodge = debug.getupvalue(debug.getproto(getscriptclosure(dodgeScript), 3, true)[1], 2);
+	cooldownT.soru = debug.getupvalue(debug.getproto(getscriptclosure(soruScript), 1, true)[1], 9);
+end
 
 LocalPlayer.CharacterAdded:Connect(function(character)
 	local root = character:WaitForChild("HumanoidRootPart");
@@ -1874,7 +1967,12 @@ LocalPlayer.CharacterAdded:Connect(function(character)
 	if (settings.character.noclip) then
 
 	end
+
+	refresh(character);
 end);
+
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait();
+refresh(character);
 
 local Shop = mainWindow:Tab("Shop");
 
@@ -1976,10 +2074,45 @@ end
 
 local Visuals = mainWindow:Tab("Visuals");
 
+task.spawn(function()
+	while true do
+		if (settings.auto_farm) then
+			print("running new quest!!");
+			doQuest();
+		end
+
+		if (settings.auto_farm_boss) then
+			print("running new boss!!");
+			doBoss();
+			print("end!");
+		end
+
+		wait();
+	end
+end)
+
 while true do
-    if (settings.auto_farm) then
-        print("running new quest!!");
-        doQuest();
-    end
+	for t, v in pairs(cooldownT) do
+		if (settings.cooldowns[t]) then
+			rawset(v, "LastUse", 0);
+		end
+	end
+	if (settings.character.infgeppo) then
+		local char = LocalPlayer.Character
+		if (char) then
+			local hum = char:FindFirstChild("Humanoid");
+			if (hum) then
+				for i, v in pairs(getconnections(hum.StateChanged)) do
+					if (v.Function and debug.getconstants(v.Function)[3] == "Landed") then
+						debug.setupvalue(v.Function, 1, 0);
+					end
+				end
+			end
+		end
+	end
+	if (settings.character.energy) then
+		energyValue.Value = energyValue.MaxValue
+	end
+
     wait();
 end

@@ -411,14 +411,14 @@ local function UiElements(Section, SectionTable, Ret)
             InputBegan = UserInputService.InputBegan:Connect(function(input, gp)
                 if input.UserInputType == Enum.UserInputType.Keyboard and not gp then
                     Ret.KeyStr = tostring(input.KeyCode)
-                    settask.spawn(Callback, input.KeyCode)
+                    task.spawn(setCallback, input.KeyCode)
                     CurrentKey.Text = string.format('[%s]', string.split(tostring(input.KeyCode), '.')[3])
                     InputBegan:Disconnect()
                     task.wait()
                     Ret.KeyTrack = input.KeyCode
                 elseif table.find(MouseInputs, input.UserInputType) and not gp then
                     Ret.KeyStr = tostring(input.UserInputType)
-                    settask.spawn(Callback, input.UserInputType)
+                    task.spawn(setCallback, input.UserInputType)
                     CurrentKey.Text = string.format('[%s]', string.split(tostring(input.UserInputType), '.')[3])
                     InputBegan:Disconnect()
                     task.wait()
@@ -442,7 +442,7 @@ local function UiElements(Section, SectionTable, Ret)
         function Ret:UpdateBind(newBind)
             Ret.KeyTrack = newBind
             Ret.KeyStr = tostring(newBind)
-            settask.spawn(Callback, newBind)
+            task.spawn(setCallback, newBind)
             CurrentKey.Text = string.format('[%s]', string.split(tostring(newBind), '.')[3])
         end
         function Ret:UpdateTitle(newTitle) Title.Text = newTitle end
