@@ -485,11 +485,39 @@ local questOrder = {
 		questName = "FireSideQuest"
 	},
 	{
-		levels = { 1201, 1350 },
+		levels = { 1201, 1250 },
 		NPCName = "Lava Pirate",
 		questNumber = 2,
 		questPosition = { -5431, 15, -5296 },
 		questName = "FireSideQuest"
+	},
+	{
+		levels = { 1251, 1275 },
+		NPCName = "Ship Deckhand",
+		questNumber = 1,
+		questPosition = { 1036, 125, 32912 },
+		questName = "ShipQuest1"
+	},
+	{
+		levels = { 1276, 1300 },
+		NPCName = "Ship Engineer",
+		questNumber = 2,
+		questPosition = { 1036, 125, 32912 },
+		questName = "ShipQuest1"
+	},
+	{
+		levels = { 1301, 1325 },
+		NPCName = "Ship Steward",
+		questNumber = 1,
+		questPosition =  { 967, 125, 33242 },
+		questName = "ShipQuest2"
+	},
+	{
+		levels = { 1326, 1350 },
+		NPCName = "Ship Officer",
+		questNumber = 2,
+		questPosition =  { 967, 125, 33242 },
+		questName = "ShipQuest2"
 	},
 	{
 		levels = { 1351, 1375 },
@@ -928,6 +956,13 @@ local startQuest = function()
 	elseif (lvl == 450) then
 		LocalPlayer.Character:BreakJoints();
 		LocalPlayer.CharacterAdded:Wait():WaitForChild("HumanoidRootPart");
+	end
+
+	if (lvl >= 1250 and lvl < 1325) then
+		commF:InvokeServer("requestEntrance", Vector3.new(923, 126, 32852));
+		wait(.1);
+	elseif (lvl > 1325 and (oldPos.Position - Vector3.new(923, 126, 32852)).Magnitude < 500) then
+		commF:InvokeServer("requestEntrance", Vector3.new(-6508, 89, -132));
 	end
     tweento(questPosition);
     if (distance > 1000) then
