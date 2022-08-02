@@ -941,7 +941,7 @@ local function UiElements(Section, SectionTable, Ret)
         local Ret = {}
 
         Button.MouseButton1Click:Connect(function()
-            task.spawn(Callback, );
+            task.spawn(Callback);
             Button.TextColor3 = Colorscheme
             Button.BackgroundColor3 = fromRGB(15, 15, 15);
             TweenService:Create(Button, TweenInfo.new(.7), {
