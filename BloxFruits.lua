@@ -964,8 +964,11 @@ local startQuest = function()
 	elseif (lvl > 1325 and (oldPos.Position - Vector3.new(923, 126, 32852)).Magnitude < 500) then
 		commF:InvokeServer("requestEntrance", Vector3.new(-6508, 89, -132));
 	end
-    tweento(questPosition);
-    if (distance > 1000) then
+
+	tweento(questPosition);
+
+
+	 if (distance > 1000) then
         wait();
         if (not spawnSet) then
 			print("setting dumb spawn");
@@ -973,6 +976,10 @@ local startQuest = function()
 		end
     end
     commF:InvokeServer("StartQuest", questInfo.questName, questInfo.questNumber);
+
+	if (lvl >= 1601 and lvl < 1625) then
+		tweento(CFrame.new(6708, 386, 121));
+	end
 end
 
 local questActive = function()
@@ -1006,8 +1013,8 @@ local attackingNPCs = {};
 local sKillingNPCs = {};
 local offsets = settings.offsets;
 
-local old;
-old = hookmetamethod(game, "__index", function(self, prop)
+local __index2;
+__index2 = hookmetamethod(game, "__index", function(self, prop)
 	if (self == Mouse and prop == "Hit") then
 		local npc = sKillingNPCs[#sKillingNPCs]
 		if (npc and settings.auto_farm and settings.auto_skill) then
@@ -1017,7 +1024,7 @@ old = hookmetamethod(game, "__index", function(self, prop)
 			end
 		end
 	end
-	return old(self, prop);
+	return __index2(self, prop);
 end)
 
 local attackNPCs = function(thread, NPCName, fakeQuest)
@@ -1043,13 +1050,12 @@ local attackNPCs = function(thread, NPCName, fakeQuest)
     local function wakeNPC(npc, first)
         local npcHumanoid = npc:WaitForChild("Humanoid");
         if (npcHumanoid.Health == 0 or table.find(attackingNPCs, npc)) then return; end
-		print("waking npc");
+
 		npcHumanoid.Died:Connect(function()
             table.remove(attackingNPCs, table.find(attackingNPCs, npc));
             wait(.1);
-			print("killed");
+
             if (fakeQuest or (not threadResumed and not questActive())) then
-				print("resumed!!");
                 coroutine.resume(thread);
                 threadResumed = true
                 for i, connection in pairs(questConnections) do
@@ -1069,13 +1075,22 @@ local attackNPCs = function(thread, NPCName, fakeQuest)
         local con;
         con = RunService.Heartbeat:Connect(function()
             if (localRoot and npcRoot) then
+				if ((localRoot.Position - npcRoot.Position).Magnitude > 75) then
+					tweening = true
+					tweento(npcRoot.CFrame);
+					tweening = false
+				end
                 localRoot.CFrame = npcRoot.CFrame * attackingPosition
                 attack();
             end
         end);
         wait(.1);
         con:Disconnect();
-
+		if ((localRoot.Position - oldPosition.Position).Magnitude > 75) then
+			tweening = true
+			tweento(npcRoot.CFrame);
+			tweening = false
+		end
 		localRoot.CFrame = oldPosition
         task.spawn(function()
             for i = 1, 3 do
@@ -1111,6 +1126,12 @@ local attackNPCs = function(thread, NPCName, fakeQuest)
         if (localRoot) then
             local npc, pos = getClosestNPC(#sKillingNPCs == 0 and attackingNPCs or sKillingNPCs);
             if (pos and not tweening) then
+				if ((characterPos - pos.Position).Magnitude > 75) then
+					tweening = true
+					tweento(pos);
+					tweening = false
+				end
+
                 local newpos = cframenew(pos.Position) * attackingPosition
 				localRoot.CFrame = newpos
 				characterPos = localRoot.Position
@@ -1153,11 +1174,11 @@ local attackNPCs = function(thread, NPCName, fakeQuest)
 			end
 		end
 
-		if (not fakeQuest and #getNPCsFromName(NPCName) == 0 and (localRoot.Position - qPosition).Magnitude > 100 and not tweening) then
-			tweening = true
-			tweento(CFrame.new(qPosition));
-			tweening = false
-		end
+		-- if (not fakeQuest and #getNPCsFromName(NPCName) == 0 and (localRoot.Position - qPosition).Magnitude > 300 and not tweening) then
+		-- 	tweening = true
+		-- 	tweento(CFrame.new(qPosition));
+		-- 	tweening = false
+		-- end
 
         attackingPosition = CFrame.new(settings.offsets.X, settings.offsets.Y, settings.offsets.Z);
     end);
@@ -1172,47 +1193,94 @@ local attackNPCs = function(thread, NPCName, fakeQuest)
 end
 
 local function startZou()
-	tweento(CFrame.new(-342, 331, 642));
-	local allFruits = commF:InvokeServer("GetFruits");
-	local money = LocalPlayer.Data.Beli.Value
-	local Backpack = LocalPlayer.Backpack
-	local fruitfound = false
-	local checkFruit = function()
+	if (commF:InvokeServer("TalkTrevor", "1") ~= 0) then
+		tweento(CFrame.new(-342, 331, 642));
+		local allFruits = commF:InvokeServer("GetFruits");
+		local money = LocalPlayer.Data.Beli.Value
+		local Backpack = LocalPlayer.Backpack
+		local fruitfound = false
 		for i, fruit in pairs(Backpack:GetChildren()) do
 			if (fruit.ToolTip == "") then
-				for i, fruitData in pairs(allFruits) do
-					if (fruit.Name == fruitData.Name) then
+				local fruitName = string.split(fruit.Name, " ")[1]
+				for i2, fruitData in pairs(allFruits) do
+					if (string.find(fruitData.Name, fruitName)) then
+						fruitName = fruitData.Name
 						if (fruitData.Price >= 1000000) then
 							fruitfound = fruit
 							break;
 						end
 					end
 				end
-				if (fruitfound) then
-					break;
+				commF:InvokeServer("StoreFruit", fruitName);
+			end
+		end
+		if (not fruitFound) then
+			local inventoryFruits = commF:InvokeServer("getInventoryFruits");
+			for i, fruitData in pairs(inventoryFruits) do
+				if (fruitData.Price >= 1000000) then
+					fruitfound = fruitData;
+					commF:InvokeServer("LoadFruit", fruitData.Name);
+					LocalPlayer.Backpack:WaitForChild(fruitData.Name);
+					commF:InvokeServer("TalkTrevor", "1");
+					commF:InvokeServer("TalkTrevor", "2");
+					commF:InvokeServer("TalkTrevor", "3");
+
+					return startZou();
 				end
 			end
 		end
+	elseif (commF:InvokeServer("ZQuestProgress", "Check") == nil) then
+		local swansRoom = workspace._WorldOrigin.Locations["Swan's Room"]
+		tweento(swansRoom.CFrame);
+		wait(1);
+		local thread = coroutine.running();
+		local oldT = settings.auto_training.buso
+		local old = settings.fast_attack
+		settings.auto_training.buso = true
+		settings.fast_attack = true
+		attackNPCs(thread, "Don Swan", true);
+		coroutine.yield();
+		settings.fast_attack = old
+		settings.auto_training.buso = oldT
+		return startZou();
+	else
+		commF:InvokeServer("ZQuestProgress", "Begin");
+		wait(1);
+		local thread = coroutine.running();
+		local oldT = settings.auto_training.buso
+		local old = settings.fast_attack
+		settings.auto_training.buso = true
+		settings.fast_attack = true
+		attackNPCs(thread, "rip_indra", true);
+		coroutine.yield();
+		settings.fast_attack = old
+		settings.auto_training.buso = oldT
+
+		commF:InvokeServer("ZQuestProgress", "Zou");
+		wait(1);
+		commF:InvokeServer("TravelZou");
 	end
-	checkFruit();
 end
 
 local doQuest = function()
-    table.clear(attackingNPCs);
+	table.clear(attackingNPCs);
 
     local thread = coroutine.running();
+
+	if (settings.auto_third or settings.auto_second) then
+		local level = getLevel();
+		if (level >= 700) then
+			startDressrosa();
+		end
+		if (level >= 1500) then
+			startZou();
+		end
+	end
 
 	local questInfo = getQuestInfo();
 	attackNPCs(thread, questInfo.NPCName, false);
 
     coroutine.yield();
-	if (settings.auto_third or settings.auto_second) then
-		local level = getLevel();
-		if (level >= 700) then
-			startDressrosa();
-			coroutine.yield();
-		end
-	end
 end
 
 local doBoss = function()
@@ -1229,7 +1297,6 @@ local doBoss = function()
 
 
 	if (found) then
-		print("attacking ".. bossName);
 		attackNPCs(thread, bossName, true);
 		coroutine.yield();
 	end
@@ -1563,11 +1630,18 @@ end);
 
 local autoWorld = main:Section("Auto World");
 
-autoWorld:Toggle("Auto Second Sea", settings.auto_third, function(callback)
+autoWorld:Toggle("Auto Second Sea", settings.auto_second, function(callback)
 	settings.auto_second = callback
 	local lvl = getLevel();
 	if (lvl >= 700) then
 		startDressrosa();
+	end
+end);
+autoWorld:Toggle("Auto Third Sea", settings.auto_third, function(callback)
+	settings.auto_third = callback
+	local lvl = getLevel();
+	if (lvl >= 1500) then
+		startZou();
 	end
 end);
 
@@ -2117,9 +2191,7 @@ task.spawn(function()
 		end
 
 		if (settings.auto_farm_boss) then
-			print("running new boss!!");
 			doBoss();
-			print("end!");
 		end
 
 		wait();

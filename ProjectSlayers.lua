@@ -182,31 +182,98 @@ for i, boss in pairs(Bosses:GetChildren()) do
     end
     local bossModel = boss:FindFirstChildOfClass("Model");
     if (bossModel) then
-        bosses[#bosses+1] = bossModel.Name
+        bosses[#bosses + 1] = bossModel.Name
     end
 end
 
 local bossSlider = farming:Dropdown("Select Boss", bosses[1], bosses, function(callback)
-    print(callback);
+    settings.boss_name = callback
 end);
 
 Bosses.ChildRemoved:Connect(function(boss)
     table.remove(bosses, table.find(bosses, boss:FindFirstChildOfClass("Model").Name));
-    bossSlider:Update();
+    bossDropdown:Update();
 end);
 Bosses.ChildAdded:Connect(function(boss)
     bosses[#bosses + 1] = boss:FindFirstChildOfClass("Model").Name
-    bossSlider:Update();
+    bossDropdown:Update();
 end);
+
+
+
+local Remotes = Services.ReplicatedStorage:WaitForChild("Remotes");
+local To_ServerRemotes = Remotes:WaitForChild("To_Server");
+local Handle_Initiate_S_ = To_ServerRemotes:WaitForChild("Handle_Initiate_S_");
+
+
+do
+    local char = LocalPlayer.Character 
+    local root = char.HumanoidRootPart
+    local hum = char.Humanoid
+    Handle_Initiate_S_:InvokeServer("fist_combat", LocalPlayer, char, root, hum, 1);
+end
+
+local function attackBoss(thread, bossName)
+    local threadResumed = false
+    local char = LocalPlayer.Character
+    local root = char:FindFirstChild("HumanoidRootPart");
+
+    local foundBoss = nil
+    for i, boss in pairs(Bosses:GetChildren()) do
+        if (boss.ClassName == "Folder") then
+            boss = boss:FindFirstChildOfClass("Configuration");
+        end
+        local bossModel = boss:FindFirstChildOfClass("Model");
+        if (bossModel and bossModel.Name == bossName) then
+            foundBoss = bossModel
+        end
+    end
+
+
+    if (not foundBoss) then
+        return coroutine.resume(thread);
+    end
+
+    local bossRoot = foundBoss:FindFirstChild("HumanoidRootPart");
+    if (not bossRoot) then return coroutine.resume(thread); end
+    tp_to(bossRoot.CFrame);
+    wait(.5);
+
+    local lasttick = tick();
+    local connection;
+    connection = Services.RunService.Heartbeat:Connect(function()
+        local bossPosition = bossRoot.Position
+        char = LocalPlayer.Character
+        if (not char) then return; end
+        root = findFirstChild(char, "HumanoidRootPart");
+        if (not root) then return; end
+        local humanoid = findFirstChild(char, "Humanoid");
+        if (not humanoid) then return; end
+
+        root.CFrame = CFrame.new(bossPosition) * CFrame.new(0, -6, 0);
+
+        local now = tick();
+        if ((now - lasttick) > 2) then
+            lasttick = now
+            for i = 1, 5 do
+                Handle_Initiate_S_:InvokeServer("fist_combat", LocalPlayer, char, root, hum, 919);
+                wait(.5);
+            end
+        end
+    end);
+
+    task.delay(10, function()
+        connection:Disconnect();
+    end);
+
+    coroutine.yield();
+end
 
 farming:Toggle("Farm Boss", false, function(callback)
-
-end);
-farming:Toggle("Auto Equip", false, function(callback)
-
+    settings.auto_farm = callback
 end);
 farming:Toggle("Auto Collect", false, function(callback)
-
+    settings.auto_collect = true
 end);
 
 local weapons = {};
@@ -216,18 +283,10 @@ for i, weapon in pairs(LocalPlayer.Backpack:GetChildren()) do
     end
 end
 
-farming:Dropdown("Select Weapon", weapons, {}, function(callback)
-
+farming:Dropdown("Select Weapon", weapons[1], weapons, function(callback)
+    settings.weapon = callback
 end);
 
-
-local sHop = main:Section("Server Hop");
-sHop:Button("Smallest Server", function()
-    serverhop("Asc");
-end);
-sHop:Button("Other Server", function()
-    serverhop("Desc");
-end);
 
 local teleports = m:Tab("Teleports");
 
@@ -249,7 +308,21 @@ for location, pos in pairs(positions.locations) do
     end);
 end
 
+local Servers = teleports:Section("Servers");
+
+Servers:Button("Smallest Server", function()
+    serverhop("Asc");
+end);
+Servers:Button("Other Server", function()
+    serverhop("Desc");
+end);
+Servers:Button("Rejoin Server", function()
+    Services.TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId);
+end);
+
 local other = teleports:Section("Other Teleports");
+
+other:SetLeft();
 
 other:Button("Sword Repair (Jeph)", function()
     tp_to(CFrame.new( 263, 282, -1511 ));
@@ -275,3 +348,11 @@ other:Button("Spider Lily", function()
         anchored = oldpos
     end
 end);
+
+while true do
+    if (settings.auto_farm) then
+        local thread = coroutine.running();
+        attackBoss(thread, settings.boss_name);
+    end
+    wait();
+end
