@@ -1,3 +1,5 @@
+-- i am gonna redo this so it's alot better with more options too
+
 
 local Visuals = {};
 Visuals.__index = Visuals
@@ -34,12 +36,14 @@ function Visuals.new()
 end
 
 function Visuals:Add(object)
-    assert(typeof(object) == 'Instance');
-    local pInstance = PointInstance.new(object);
-    Visuals.Objects[pInstance] = {};
-    local objectDrawings = Visuals.Objects[pInstance]
+    assert(typeof(object) == 'Instance' or typeof(object) == "Vector3");
+    local point = typeof(object) == "Instance" and PointInstance.new(object) or Point3D.new(object);
+
+    Visuals.Objects[point] = {};
+    local objectDrawings = Visuals.Objects[point]
     local defaultColor = color3New(1, 1, 1);
     local defaultColorSecondary = color3New();
+
 
     local DrawEntry = {};
     DrawEntry.__index = DrawEntry
@@ -47,7 +51,7 @@ function Visuals:Add(object)
         options = options or {};
 
         local textDynamic = TextDynamic.new();
-        textDynamic.Position = options.Offset and PointInstance.new(object, CFrame.new(Vector3.new(unpack(options.Offset)))) or PointInstance.new(object);
+        textDynamic.Position = options.Offset and PointInstance.new(object, CFrame.new(Vector3.new(unpack(options.Offset)))) or point
         options.Offset = nil
         DrawUtils:SetProperties(textDynamic, options);
         textDynamic.Text = text
@@ -66,7 +70,7 @@ function Visuals:Add(object)
         from = from or Point2D.new(viewportSize.X / 2, viewportSize.Y);
 
         local lineDynamic = LineDynamic.new();
-        lineDynamic.To = options.Offset and PointInstance.new(object, CFrame.new(Vector3.new(unpack(options.Offset)))) or PointInstance.new(object);
+        lineDynamic.To = options.Offset and PointInstance.new(object, CFrame.new(Vector3.new(unpack(options.Offset)))) or point
         options.Offset = nil
         DrawUtils:SetProperties(lineDynamic, options);
         lineDynamic.Color = options.Color or defaultColor
@@ -115,7 +119,7 @@ function Visuals:Add(object)
         circleDynamic.Color = options.Color or defaultColor
         circleDynamic.Thickness = options.Thickness or .1
         circleDynamic.Opacity = options.Opacity or 1
-        circleDynamic.Position = pInstance
+        circleDynamic.Position = point
 
         table.insert(Visuals.Objects.Circle, circleDynamic);
         table.insert(objectDrawings, circleDynamic);

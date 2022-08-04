@@ -243,7 +243,7 @@ end;
 
 local function AddBox(player) 
     local Character = player.Character;
-    local HumanoidRootPart = Character.HumanoidRootPart;
+    local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart");
 
     local Top = PointInstance(HumanoidRootPart, CFrame(Vector3(2.2, 3, 0)));
     local Bottom = PointInstance(HumanoidRootPart, CFrame(Vector3(-2.2, -3, 0)));

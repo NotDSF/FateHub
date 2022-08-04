@@ -77,7 +77,8 @@ local settings = {
 	auto_snipe_fruits = false,
 
 	character = {},
-	cooldowns = {}
+	cooldowns = {},
+	esp = {}
 };
 
 local trampoline_call = function(func, ...)
@@ -572,7 +573,7 @@ local questOrder = {
 		levels = { 1601, 1625 },
 		NPCName = "Dragon Crew Archer",
 		questNumber = 2,
-		questPosition = { 5832, 51, -1101 },
+		questPosition = { 6708, 386, 121 },
 		questName = "AmazonQuest"
 	},
 	{
@@ -976,10 +977,6 @@ local startQuest = function()
 		end
     end
     commF:InvokeServer("StartQuest", questInfo.questName, questInfo.questNumber);
-
-	if (lvl >= 1601 and lvl < 1625) then
-		tweento(CFrame.new(6708, 386, 121));
-	end
 end
 
 local questActive = function()
@@ -2181,7 +2178,79 @@ for i, accessoryInfo in pairs(accessoriesInfo) do
 	end);
 end
 
-local Visuals = mainWindow:Tab("Visuals");
+local VisualsTab = mainWindow:Tab("Visuals");
+
+local Items = VisualsTab:Section("Items");
+
+local chestsVisuals = {};
+
+Items:Toggle("Chest Esp", settings.esp.chest, function(callback)
+	settings.esp.chest = callback
+	for i, visual in pairs(chestsVisuals) do
+		local text = visual:Get("TextDynamic");
+		text.Visible = callback
+	end
+end);
+
+local Locations = VisualsTab:Section("Islands");
+
+local locationsVisuals = {};
+
+for location, position in pairs(islands_) do
+	Locations:Toggle(location, false, function(callback)
+		local Visual = locationsVisuals[location]
+		if (not Visual) then
+			local LocationVisual = Visuals:Add(position.Position);
+			LocationVisual:AddText(location, {
+				Visible = callback
+			});
+			locationsVisuals[location] = LocationVisual
+			Visual = LocationVisual
+		end
+		local text = Visual:Get("TextDynamic");
+		text.Visible = callback
+	end);
+end
+
+local chestColours = {
+	[1] = Color3.fromRGB(192, 192, 192),
+	[2] = Color3.fromRGB(255, 215, 0),
+	[3] = Color3.fromRGB(185, 242, 255)
+};
+
+Workspace.ChildAdded:Connect(function(instance)
+	if (string.find(instance.Name, "Chest")) then
+		local ChestVisual = Visuals:Add(instance);
+		local chestType = string.match(instance.Name, "Chest(%d)");
+		ChestVisual:AddText(instance.Name, {
+			Color = chestColours[tonumber(chestType)],
+			Visible = settings.esp.chest or false
+		});
+		instance.AncestryChanged:Connect(function(inst, parent)
+			if (parent == nil) then
+				ChestVisual:Destroy();
+			end
+		end);
+		chestsVisuals[#chestsVisuals + 1] = ChestVisual
+	end
+end);
+
+for i, instance in pairs(Workspace:GetChildren()) do
+	if (string.find(instance.Name, "Chest")) then
+		local ChestVisual = Visuals:Add(instance);
+		local chestType = string.match(instance.Name, "Chest(%d)");
+		ChestVisual:AddText(instance.Name, {
+			Color = chestColours[tonumber(chestType)],
+			Visible = settings.esp.chest or false
+		});
+		instance.AncestryChanged:Connect(function(instance, parent)
+			if (parent == nil) then
+				ChestVisual:Destroy();
+			end
+		end);
+		chestsVisuals[#chestsVisuals + 1] = ChestVisual
+	end
+end
 
 task.spawn(function()
 	while true do

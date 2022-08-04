@@ -171,6 +171,7 @@ local gunmodSettings = settings.gunmods
 local backtrackSettings = settings.backtrack
 local movementSettings = settings.movement
 
+local infocache = {};
 local trampoline_call = function(func, ...)
     local funcinfo = debug.getinfo(func);
     local funcenv = getfenv(func);
@@ -712,7 +713,7 @@ services.RunService.RenderStepped:Connect(function()
             end
         end
 
-        local unitRay = Mouse.UnitRay
+        local unitRay = mouse.UnitRay
         local part = findPartOnRayWithIgnoreList(Workspace, Ray.new(unitRay.Origin, unitRay.Direction * 1000), ignoreList);
         local isPlayer;
         for player, character in pairs(aliveCharacters) do
