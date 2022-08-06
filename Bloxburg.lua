@@ -88,7 +88,15 @@ local tp_to = function(pos)
     local char = LocalPlayer.Character
     if (char) then
         local root = char.HumanoidRootPart
-        root.CFrame = pos
+        if (settings.auto_farm.legit) then
+            local hum = char:FindFirstChildOfClass("Humanoid");
+            if (hum) then
+                hum:MoveTo(pos.Position);
+                hum.MoveToFinished:Wait();
+            end
+        else
+            root.CFrame = pos
+        end
         return true;
     end
     return false
@@ -289,6 +297,8 @@ ChatBubbleEvent.Event:Connect(function(chatBar)
     local fillFlavour = debug.getproto(BensIceCream.StartShift, 2, true)[1]
     local fillTopping = debug.getproto(BensIceCream.StartShift, 3, true)[1]
 
+    local legit = settings.auto_farm.legit
+
     for i, item in pairs(ingredients) do
         if (item.Image == "rbxassetid://2132263837") then -- ice cream flavour
             local ImageColor3 = item.ImageColor3
@@ -320,11 +330,16 @@ ChatBubbleEvent.Event:Connect(function(chatBar)
                 print("Adding " .. toppingData[1]);
                 debug.setupvalue(doFillTopping, 3, toppingData[1]);
                 debug.setupvalue(doFillTopping, 5, toppingData[1]);
-                task.wait(.75);
+                if (not legit) then
+                    wait(.75);
+                end
                 doFillTopping();
+                break;
             end
         end
-        task.wait(.1);
+        if (not legit) then
+            wait(.1);
+        end
     end
 
     local customerModel = chatBar:FindFirstAncestor("BensIceCreamCustomer");
@@ -350,7 +365,7 @@ end);
 local mainWindow = UILibrary:CreateWindow("Fate Hub", "Blox Fruits", Color3.fromRGB(100, 0, 255));
 
 local main = mainWindow:Tab("Main");
-local autoFarm = main:Section("Auto Farm");
+local autoFarm = main:Section("Auto Work");
 
 autoFarm:Toggle("Auto Ben", settings.auto_farm.ben, function(callback)
     if (callback) then
@@ -358,3 +373,8 @@ autoFarm:Toggle("Auto Ben", settings.auto_farm.ben, function(callback)
     end
     settings.auto_farm.ben = callback
 end);
+
+autoFarm:Toggle("Legit Work", settings.auto_farm.legit, function(callback)
+    settings.auto_farm.legit = callback
+end);
+
