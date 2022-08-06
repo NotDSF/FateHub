@@ -241,6 +241,34 @@ local function GetClosestPlayerFromVector2(pos)
     return Players[1] and Players[1][2];
 end;
 
+local function closesetSlientAimTarget(origin, ignore)
+    local closest = nil
+    local pxDifference = 9e9
+    local MousePosition = UserInputService.GetMouseLocation(UserInputService)
+    -- local castParams = RaycastParams
+    RaycastParams.FilterDescendantsInstances = ignore -- {LocalPlayer.Character, Camera, Workspace.Debris, Workspace.Ray_Ignore}
+
+    for i,v in GetChildren(GPlayers) do
+        if v ~= LocalPlayer and (v.Team ~= LocalPlayer.Team or not Flags.TeamCheck) and FindFirstChild(v, 'Status') and v.Status.Alive.Value then
+            local vChar = v.Character
+            local Target = vChar[Flags.SilentAimTarget]
+            local screenPos, vis = WorldToViewportPoint(Camera, Target.Position)
+            local displacement = (Vector2(screenPos.X, screenPos.Y) - MousePosition).Magnitude
+
+            if vis and displacement <= FOV.Radius and displacement < pxDifference then
+                -- cast check
+                local cast = Raycast(Workspace, origin, (Target.Position - origin) * 1.5, RaycastParams)
+                if cast and game.IsDescendantOf(cast.Instance, vChar) then
+                    pxDifference = displacement
+                    closest = Target
+                end
+            end
+        end
+    end
+
+    return closest
+end
+
 local function AddBox(player) 
     local Character = player.Character;
     local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart");
@@ -563,19 +591,15 @@ end;
 BackupNamecall = hookmetamethod(game, "__namecall", function(self, ...) 
     local method = getnamecallmethod();
 
-    if method == "FindPartOnRayWithWhitelist" and Flags.SilentAim and Gun.Value then
+    if method == "FindPartOnRayWithIgnoreList" and Flags.SilentAim then
         local args = {...};
-        local MouseVector = Vector2(Mouse.X, Mouse.Y);
-        local Closest = GetClosestPlayerFromVector2(MouseVector);
-        local Head = LocalPlayer.Character.Head.Position;
+        local Closest = closesetSlientAimTarget(args[1].Origin, args[2])
+
+        print('Slient aim shit', Closest)
 
         if not Closest then return BackupNamecall(self, ...) end;
-
-        local Target = Closest.Character[Flags.SilentAimTarget];
-        local Result = Raycast(Workspace, Head, Target.Position - Head);
-        if Result and not IsDescendantOf(Result.Instance, Closest.Character) or not Result then return BackupNamecall(self, ...) end;
         
-        args[1] = Ray(args[1].Origin, Target.Position - args[1].Origin);
+        args[1] = Ray(args[1].Origin, (Closest.Position - args[1].Origin) * 1.5);
         return BackupNamecall(self, unpack(args));
     end;
 
