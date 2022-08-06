@@ -220,7 +220,9 @@ end
 
 local jobsLoaded = false
 local jobsLoadedEvent = Instance.new("BindableEvent");
-local ChatBubbleEvent = Instance.new("BindableEvent");
+local BensIceCreamEvent = Instance.new("BindableEvent");
+local BloxyBurgersCashierEvent = Instance.new("BindableEvent");
+local MechanicEvent = Instance.new("BindableEvent");
 
 restorefunction(JobHandler.CreateChatBubble);
 restorefunction(LoadingHandler.ShowLoading);
@@ -230,9 +232,13 @@ local oldCreateChatBubble;
 oldCreateChatBubble = hookfunction(JobHandler.CreateChatBubble, function(...)
     local ret = oldCreateChatBubble(...);
     if (settings.auto_farm.ben) then
-        print("firing chatbubble event");
-        ChatBubbleEvent:Fire(ret);
+        BensIceCreamEvent:Fire(ret);
+    elseif (settings.auto_farm.buger_cashier) then
+        BloxyBurgersCashierEvent:Fire(ret);
+    elseif (settings.auto_farm.mechanic) then
+        MechanicEvent:Fire(ret);
     end
+
     return ret;
 end);
 local oldShowLoading;
@@ -260,11 +266,11 @@ local toppings = {
     ["rbxassetid://22360490"] = {"Nuts", { 927, 13, 1043 }}
 };
 
-ChatBubbleEvent.Event:Connect(function(chatBar)
+BensIceCreamEvent.Event:Connect(function(chatBar)
     if (not jobsLoaded) then
         print("loading job...");
         jobsLoadedEvent.Event:Wait();
-        task.wait(1);
+        wait(1);
         print("loaded");
     end
 
@@ -274,7 +280,7 @@ ChatBubbleEvent.Event:Connect(function(chatBar)
     local cupsPosition = CFrame.new(929, 13, 1050);
     if ((root.Position - cupsPosition.Position).Magnitude > 5) then
         tp_to(cupsPosition);
-        task.wait(.5);
+        wait(.5);
     end
 
     local BensIceCream = filtergc("table", {
@@ -345,7 +351,9 @@ ChatBubbleEvent.Event:Connect(function(chatBar)
     local customerModel = chatBar:FindFirstAncestor("BensIceCreamCustomer");
     local customerRoot = customerModel:WaitForChild("HumanoidRootPart");
     tp_to(customerRoot.CFrame * CFrame.new(0, 0, -5));
-    root.CFrame *= CFrame.Angles(0, math.pi, 0);
+    if (not legit) then
+        root.CFrame *= CFrame.Angles(0, math.pi, 0);
+    end
 
     local workStations = workspace.Environment.Locations.BensIceCream.CustomerTargets:GetChildren();
     local workStation;
@@ -361,17 +369,134 @@ ChatBubbleEvent.Event:Connect(function(chatBar)
     });
 end);
 
+local foods = {
+    ["333557004"] = "Deluxe",
+    ["333556924"] =  "Classic",
+    ["333556968"] = "Double",
+    ["333557058"] = "Fries",
+    ["333557087"] = "Cola"
+};
 
-local mainWindow = UILibrary:CreateWindow("Fate Hub", "Blox Fruits", Color3.fromRGB(100, 0, 255));
+BloxyBurgersCashierEvent.Event:Connect(function(chatBar) 
+    if (not jobsLoaded) then
+        print("loading...");
+        jobsLoadedEvent.Event:Wait();
+        wait(1);
+        print("loaded");
+    end
+
+    local customerModel = chatBar:FindFirstAncestor("BloxyBurgersCustomer");
+
+    local descendants = chatBar:GetDescendants();
+    local ingredients = {};
+
+    for i, item in pairs(descendants) do
+        if (item.Name == "Icon" and string.match(item.Parent.Name, "%s")) then
+            ingredients[#ingredients + 1] = item
+        end
+    end
+
+    local doAction = filtergc("function", {
+        Name = "doAction"
+    }, true);
+
+    local legit = settings.auto_farm.legit
+    if (legit) then
+        wait(1);
+    end
+
+    for i, ingredient in pairs(ingredients) do
+        local assetLink = ingredient.Image
+        local asset = string.match(assetLink, "rbxassetid://(%w+)");
+        local food = foods[asset]
+        print(assetLink, asset, food);
+        if (food) then
+            doAction(food);
+            wait(legit and .5 or .1);
+        end
+    end
+    doAction("Done");
+end);
+
+
+
+local colours = {
+    ["Black"] = "Black",
+    ["Magenta"] = "Purple",
+    ["Bright red"] = "Red",
+    ["Lime green"] = "Green"
+};
+
+MechanicEvent.Event:Connect(function(chatBar)
+    if (not jobsLoaded) then
+        print("loading...");
+        -- jobsLoadedEvent.Event:Wait();
+        -- wait(1);
+        print("loaded");
+    end
+
+    local descendants = chatBar:GetDescendants();
+    local ingredients = {};
+
+    for i, item in pairs(descendants) do
+        if (item.Name == "Icon" and string.match(item.Parent.Name, "%s")) then
+            ingredients[#ingredients + 1] = item
+        end
+    end
+
+    local done = filtergc("function", {
+        Name = "done"
+    });
+
+    local legit = settings.auto_farm.legit
+    if (legit) then
+        wait(1);
+    end
+
+    local paintingEquipment = workspace.Environment.Locations.MikesMotors.PaintingEquipment
+
+    for i, item in pairs(ingredients) do
+        if (item.Image == "rbxassetid://2132263837") then
+            local ImageColor3 = item.ImageColor3
+            local brick = BrickColor.new(ImageColor3);
+            local paint = colours[tostring(brick)]
+            tp_to(CFrame.new(1175, 13, 387));
+            print(paint, brick);
+            if (paint) then
+                fireServer({
+                    Type = "TakePainter",
+                    Object = paintingEquipment:FindFirstChild(paint)
+                });
+            end
+        elseif (item.Image == "rbxassetid://602099154") then
+
+        end
+    end
+
+    for i, d in pairs(done) do
+        d();
+    end
+end);
+
+
+local mainWindow = UILibrary:CreateWindow("Fate Hub", "Bloxburg 1", Color3.fromRGB(100, 0, 255));
 
 local main = mainWindow:Tab("Main");
 local autoFarm = main:Section("Auto Work");
 
-autoFarm:Toggle("Auto Ben", settings.auto_farm.ben, function(callback)
+-- auto job only works for when you are by yourself, will fix later
+
+autoFarm:Toggle("Auto IceCream", settings.auto_farm.ben, function(callback)
     if (callback) then
         JobHandler:GoToWork("BensIceCreamSeller");
     end
     settings.auto_farm.ben = callback
+end);
+autoFarm:Toggle("Auto BloxyBurger", settings.auto_farm.buger_cashier, function(callback)
+    if (callback) then
+        JobHandler:GoToWork("BloxyBurgersCashier");
+    end
+    settings.auto_farm.buger_cashier = callback
 end);
 
 autoFarm:Toggle("Legit Work", settings.auto_farm.legit, function(callback)
