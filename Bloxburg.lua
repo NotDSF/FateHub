@@ -255,6 +255,16 @@ oldHideLoading = hookfunction(LoadingHandler.HideLoading, function(...)
     return oldHideLoading(...);
 end);
 
+local locations = workspace.Environment.Locations
+local getLocation = function(location)
+    return locations:FindFirstChild(location);
+end
+
+local requireModule = function(moduleName)
+    local _JobHandler = LocalPlayer.PlayerGui.MainGUI.Scripts.JobHandler
+    return require(_JobHandler:FindFirstChild(moduleName));
+end
+
 local flavours = {
     ["Sunrise"] = {"Strawberry", { 936, 13, 1051 }},
     ["Pine Cone"]  =  {"Chocolate", { 933, 13, 1052 }},
@@ -283,13 +293,13 @@ BensIceCreamEvent.Event:Connect(function(chatBar)
         wait(.5);
     end
 
-    local BensIceCream = filtergc("table", {
-        Keys = {"GetOrderPhrase", "AddCustomer", "ShiftRadius"}
-    }, true);
+    local BensIceCream = requireModule("BensIceCreamSeller");
 
     fireServer({
         Type = "TakeIceCreamCup"
     });
+
+    task.wait(.1);
 
     local descendants = chatBar:GetDescendants();
     local ingredients = {};
@@ -304,6 +314,8 @@ BensIceCreamEvent.Event:Connect(function(chatBar)
     local fillTopping = debug.getproto(BensIceCream.StartShift, 3, true)[1]
 
     local legit = settings.auto_farm.legit
+
+    local toppingData;
 
     for i, item in pairs(ingredients) do
         if (item.Image == "rbxassetid://2132263837") then -- ice cream flavour
@@ -326,25 +338,29 @@ BensIceCreamEvent.Event:Connect(function(chatBar)
                 end
             end
         elseif (toppings[item.Image]) then
-            local toppingData = toppings[item.Image]
-            tp_to(CFrame.new(unpack(toppingData[2])));
-
-            debug.setupvalue(fillTopping, 3, toppingData[1]);
-            debug.setupvalue(fillTopping, 5, toppingData[1]);
-            local doFillTopping = select(3, fillTopping());
-            if (doFillTopping) then
-                print("Adding " .. toppingData[1]);
-                debug.setupvalue(doFillTopping, 3, toppingData[1]);
-                debug.setupvalue(doFillTopping, 5, toppingData[1]);
-                if (not legit) then
-                    wait(.75);
-                end
-                doFillTopping();
-                break;
-            end
+            toppingData = toppings[item.Image]
         end
         if (not legit) then
             wait(.1);
+        end
+    end
+
+    if (toppingData) then
+        tp_to(CFrame.new(unpack(toppingData[2])));
+
+        debug.setupvalue(fillTopping, 3, toppingData[1]);
+        debug.setupvalue(fillTopping, 5, toppingData[1]);
+        local doFillTopping = select(3, fillTopping());
+        if (doFillTopping) then
+            print("Adding " .. toppingData[1]);
+            debug.setupvalue(doFillTopping, 3, toppingData[1]);
+            debug.setupvalue(doFillTopping, 5, toppingData[1]);
+            if (not legit) then
+                wait(.5);
+            end
+            doFillTopping();
+        else
+            print("fail");
         end
     end
 
@@ -355,7 +371,7 @@ BensIceCreamEvent.Event:Connect(function(chatBar)
         root.CFrame *= CFrame.Angles(0, math.pi, 0);
     end
 
-    local workStations = workspace.Environment.Locations.BensIceCream.CustomerTargets:GetChildren();
+    local workStations = getLocation("BensIceCream").CustomerTargets:GetChildren();
     local workStation;
     for i , _workStation in pairs(workStations) do
         if (_workStation.Occupied.Value == customerModel) then
@@ -377,7 +393,7 @@ local foods = {
     ["333557087"] = "Cola"
 };
 
-BloxyBurgersCashierEvent.Event:Connect(function(chatBar) 
+BloxyBurgersCashierEvent.Event:Connect(function(chatBar)
     if (not jobsLoaded) then
         print("loading...");
         jobsLoadedEvent.Event:Wait();
@@ -385,7 +401,35 @@ BloxyBurgersCashierEvent.Event:Connect(function(chatBar)
         print("loaded");
     end
 
+    local workStations = getLocation("BloxyBurgers").CashierWorkstations
+
+    local character = LocalPlayer.Character
+    local root = character:FindFirstChild("HumanoidRootPart");
     local customerModel = chatBar:FindFirstAncestor("BloxyBurgersCustomer");
+    local customerRoot = customerModel:FindFirstChild("HumanoidRootPart");
+
+    local closest, mag = nil, math.huge
+    for i, v in pairs(workStations:GetChildren()) do
+        local magnitude = (customerRoot.Position - v:GetBoundingBox().Position).Magnitude
+        if (mag > magnitude) then
+            closest = v
+            mag = magnitude
+        end
+    end
+
+    local legit = settings.auto_farm.legit
+
+    if (legit) then
+        local humanoid = character:FindFirstChild("Humanoid");
+        if (humanoid) then
+            humanoid:MoveTo(closest:GetBoundingBox().Position);
+            humanoid.MoveToFinished:Wait();
+        end
+    else
+        root.CFrame = closest:GetBoundingBox();
+        root.CFrame *= CFrame.Angles(0, math.pi, 0);
+    end
+    
 
     local descendants = chatBar:GetDescendants();
     local ingredients = {};
@@ -400,10 +444,8 @@ BloxyBurgersCashierEvent.Event:Connect(function(chatBar)
         Name = "doAction"
     }, true);
 
-    local legit = settings.auto_farm.legit
-    if (legit) then
-        wait(1);
-    end
+    debug.setupvalue(doAction, 2, closest);
+
 
     for i, ingredient in pairs(ingredients) do
         local assetLink = ingredient.Image
@@ -419,7 +461,6 @@ BloxyBurgersCashierEvent.Event:Connect(function(chatBar)
 end);
 
 
-
 local colours = {
     ["Black"] = "Black",
     ["Magenta"] = "Purple",
@@ -430,8 +471,8 @@ local colours = {
 MechanicEvent.Event:Connect(function(chatBar)
     if (not jobsLoaded) then
         print("loading...");
-        -- jobsLoadedEvent.Event:Wait();
-        -- wait(1);
+        jobsLoadedEvent.Event:Wait();
+        wait(1);
         print("loaded");
     end
 
@@ -494,12 +535,28 @@ autoFarm:Toggle("Auto IceCream", settings.auto_farm.ben, function(callback)
 end);
 autoFarm:Toggle("Auto BloxyBurger", settings.auto_farm.buger_cashier, function(callback)
     if (callback) then
-        JobHandler:GoToWork("BloxyBurgersCashier");
+        task.spawn(JobHandler.GoToWork, JobHandler, "BloxyBurgersCashier");
+        jobsLoadedEvent.Event:Wait();
+        local displays = workspace.Environment.Locations.BloxyBurgers.Displays
+        local character = LocalPlayer.Character
+        local root = character:FindFirstChild("HumanoidRootPart");
+        if (root) then
+            root.CFrame = displays:FindFirstChild("Support", true).CFrame
+            root.CFrame *= CFrame.Angles(math.pi, math.pi, 0);
+            root.CFrame *= CFrame.new(0, -3, -5);
+        end
     end
     settings.auto_farm.buger_cashier = callback
 end);
 
 autoFarm:Toggle("Legit Work", settings.auto_farm.legit, function(callback)
     settings.auto_farm.legit = callback
+end);
+
+autoFarm:Button("End Shift", function()
+    fireServer({
+        Type = "EndShift"
+    });
+    JobHandler:SetWorking(nil);
 end);
 
