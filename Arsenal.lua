@@ -34,36 +34,11 @@ type Section = { Section: (self: Section, name: string) -> Main }
 type Window = { Tab: (self: Window, name: string) -> Section, VisiblityKey: Enum.KeyCode }
 type Library = { CreateWindow: (self: Library, name: string, game: string, colorscheme: Color3?) -> Window }
 
-local Import do
-    local request = syn.request;
-    local format = string.format;
-    local HttpService = game.HttpService;
-    local decode = syn.crypt.base64.decode;
-
-    Import = function(name) 
-        local Response = request({
-            Url = format("https://api.github.com/repos/NotDSF/FateHub/contents/%s", name),
-            Headers = {
-                Authorization = "bearer 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"
-            }
-        });
-
-        local ResponseBody = HttpService.JSONDecode(HttpService, Response.Body);
-        local res, err = loadstring(decode(ResponseBody.content));
-        if not res then
-            return err;
-        end;
-
-        return res();
-    end;
-end;
-
 local TNow = tick();
-local Lib: Library = Import("UILibrary.lua");
+local Lib: Library = loadfile("UILIB.lua")();
 local Window = Lib:CreateWindow("Fate Hub", "Arsenal", Color3.fromRGB(255, 50, 150));
 Window:SetKeybindClose(Enum.KeyCode.F5);
 
-local Pairs = pairs;
 local ToastNotif = syn.toast_notification;
 local Game = game;
 local GPlayers = Game.Players;
@@ -180,7 +155,7 @@ local function GetClosestPlayer(novisible, maxdistance)
     local LPos = LocalPlayer.Character.HumanoidRootPart.Position;
     local Players = {};
 
-    for i,v in Pairs(GetChildren(GPlayers)) do
+    for i,v in GetChildren(GPlayers) do
         if v ~= LocalPlayer then
             if IsTeam(LocalPlayer, v.Character) then 
                 continue;
@@ -217,7 +192,7 @@ local function GetClosestPlayerFromVector2(pos)
 
     local Players = {};
 
-    for i,v in Pairs(GetChildren(GPlayers)) do
+    for i,v in GetChildren(GPlayers) do
         if v ~= LocalPlayer then
             if Flags.TeamCheck and v.TeamColor == LocalPlayer.TeamColor then 
                 continue;
@@ -229,7 +204,7 @@ local function GetClosestPlayerFromVector2(pos)
             if HumanoidRootPart then
                 local Vector, Visible = WorldToViewportPoint(Camera, HumanoidRootPart.Position);
                 local Between = (Vector2(Vector.X, Vector.Y) - pos).magnitude;
-                if Visible and Between <= FOV.Radius then
+                if Visible and (Flags.SilentAim and Between <= FOV.Radius or true) then
                     Players[#Players+1] = {Between, v};
                 end;
             end;
@@ -241,37 +216,9 @@ local function GetClosestPlayerFromVector2(pos)
     return Players[1] and Players[1][2];
 end;
 
-local function closesetSlientAimTarget(origin, ignore)
-    local closest = nil
-    local pxDifference = 9e9
-    local MousePosition = UserInputService.GetMouseLocation(UserInputService)
-    -- local castParams = RaycastParams
-    RaycastParams.FilterDescendantsInstances = ignore -- {LocalPlayer.Character, Camera, Workspace.Debris, Workspace.Ray_Ignore}
-
-    for i,v in GetChildren(GPlayers) do
-        if v ~= LocalPlayer and (v.Team ~= LocalPlayer.Team or not Flags.TeamCheck) and FindFirstChild(v, 'Status') and v.Status.Alive.Value then
-            local vChar = v.Character
-            local Target = vChar[Flags.SilentAimTarget]
-            local screenPos, vis = WorldToViewportPoint(Camera, Target.Position)
-            local displacement = (Vector2(screenPos.X, screenPos.Y) - MousePosition).Magnitude
-
-            if vis and displacement <= FOV.Radius and displacement < pxDifference then
-                -- cast check
-                local cast = Raycast(Workspace, origin, (Target.Position - origin) * 1.5, RaycastParams)
-                if cast and game.IsDescendantOf(cast.Instance, vChar) then
-                    pxDifference = displacement
-                    closest = Target
-                end
-            end
-        end
-    end
-
-    return closest
-end
-
 local function AddBox(player) 
     local Character = player.Character;
-    local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart");
+    local HumanoidRootPart = Character.HumanoidRootPart;
 
     local Top = PointInstance(HumanoidRootPart, CFrame(Vector3(2.2, 3, 0)));
     local Bottom = PointInstance(HumanoidRootPart, CFrame(Vector3(-2.2, -3, 0)));
@@ -407,19 +354,6 @@ do
     Weapon:Toggle("No Spread", false, function(value) Flags.NoSpread = value; end);
     Weapon:Toggle("Rainbow Weapon", false, function(value) Flags.WepRainbow = value; end);
 
-    local RacistMode = LegitTab:Section("Racist Mode");
-    RacistMode:Button("Become US cop", function() 
-        for i,v in game.Players do
-            if FindFirstChild(v.Character, "Head") then
-                local HeadColor = v.Character.Head.Color;
-                if HeadColor == BrickColor.new("Brown") or HeadColor == BrickColor.new("Black") then
-                    Camera.CFrame = CFrame(Camera.CFrame.Position, v.Character.Head.Position);
-                    Weapon.firebullet();
-                end;
-            end;
-        end;
-    end);
-
     Flags.AimbotVisible = true;
     Flags.TriggerBotDelay = 0;
     Flags.AimbotMaxDistance = 9999;
@@ -464,13 +398,13 @@ do
 
     ESP:Toggle("Box ESP", false, function(value) 
         if value then
-            for i,v in Pairs(GetChildren(GPlayers)) do
+            for i,v in GetChildren(GPlayers) do
                 if v ~= LocalPlayer and v.Character and FindFirstChild(v.Character, "HumanoidRootPart") then
                     AddBox(v);
                 end;
             end;
         else
-            for i,v in Pairs(ESPObjects) do
+            for i,v in ESPObjects do
                 v.Rect.Visible = false;
                 v.Text.Visible = false;
                 ESPObjects[i] = nil;
@@ -481,13 +415,13 @@ do
 
     ESP:Toggle("Tracer ESP", false, function(value) 
         if value then
-            for i,v in Pairs(GetChildren(GPlayers)) do
+            for i,v in GetChildren(GPlayers) do
                 if v ~= LocalPlayer and v.Character and FindFirstChild(v.Character, "HumanoidRootPart") then
                     AddLine(v);
                 end;
             end;
         else
-            for i,v in Pairs(ESPLines) do
+            for i,v in ESPLines do
                 v.Line.Visible = false;
                 ESPLines[i] = nil;
             end;
@@ -535,7 +469,7 @@ do
 
     Main:Toggle("Staff Check", true, function(value) 
         if value then
-            for i,v in Pairs(GetChildren(GPlayers)) do
+            for i,v in GetChildren(GPlayers) do
                 if ModCheck.isMod(v) then
                     SynapseNotification("A moderator is in your game!", ToastType.Warning);
                 end;
@@ -554,7 +488,7 @@ do
 
     local function GrabConfigs() 
         local Configs = {};
-        for i,v in Pairs(listfiles("FatesHub/configs/Arsenal")) do
+        for i,v in listfiles("FatesHub/configs/Arsenal") do
             local name = v:split("\\")[4];
             if name:split(".")[2] == "json" then
                 Configs[i] = name;
@@ -591,15 +525,20 @@ end;
 BackupNamecall = hookmetamethod(game, "__namecall", function(self, ...) 
     local method = getnamecallmethod();
 
-    if method == "FindPartOnRayWithIgnoreList" and Flags.SilentAim then
+    if method == "FindPartOnRayWithIgnoreList" and (Flags.SilentAim or Flags.RageBot) then
         local args = {...};
-        local Closest = closesetSlientAimTarget(args[1].Origin, args[2])
-
-        print('Slient aim shit', Closest)
+        local MouseVector = Vector2(Mouse.X, Mouse.Y);
+        local Closest = GetClosestPlayerFromVector2(MouseVector);
+        local Head = LocalPlayer.Character.Head.Position;
 
         if not Closest then return BackupNamecall(self, ...) end;
+
+        RaycastParams.FilterDescendantsInstances = { LocalPlayer.Character, Camera, Workspace.Map.Ignore };
+        local Target = Closest.Character[Flags.SilentAimTarget];
+        local Result = Raycast(Workspace, Head, Target.Position - Head, RaycastParams);
+        if Result and not IsDescendantOf(Result.Instance, Closest.Character) or not Result then return BackupNamecall(self, ...) end;
         
-        args[1] = Ray(args[1].Origin, (Closest.Position - args[1].Origin) * 1.5);
+        args[1] = Ray(args[1].Origin, (Target.Position - args[1].Origin) * 1.5);
         return BackupNamecall(self, unpack(args));
     end;
 
@@ -622,9 +561,8 @@ GPlayers.PlayerAdded.Connect(GPlayers.PlayerAdded, function(player)
     end;
 end);
 
-local Space = Enum.KeyCode.Space;
-UserInputService.InputBegan:Connect(function(input) 
-    if input.KeyCode == Space and Flags.InfJump and equipped.Value ~= "none" then
+UserInputService.JumpRequest:Connect(function() 
+    if Flags.InfJump and equipped.Value ~= "none" then
         LocalPlayer.Character.Humanoid:ChangeState(3);
     end;
 end);
@@ -639,7 +577,7 @@ end);
 
 Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
     if Flags.ESP then
-        for i,v in Pairs(ESPObjects) do
+        for i,v in ESPObjects do
             local Player = v.Player;
             local Character = v.Character;
             local Distance = floor((LocalPlayer.Character.Head.Position - Character.Head.Position).magnitude);
@@ -682,7 +620,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
     end;
 
     if Flags.Tracers then
-        for i,v in Pairs(ESPLines) do
+        for i,v in ESPLines do
             local Player = v.Player;
             local Character = v.Character;
             local Distance = floor((LocalPlayer.Character.Head.Position - Character.Head.Position).magnitude) < Flags.ESPMaxDistance;
@@ -741,8 +679,11 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
             local Target = FindFirstChild(Closest.Character, Flags.RageTarget or "Head");
             if Target then
                 local Result = Raycast(Workspace, Head, Target.Position - Head, RaycastParams);
+                local _, Visible = WorldToViewportPoint(Camera, Target.Position);
                 if Result and IsDescendantOf(Result.Instance, Closest.Character) then
-                    Camera.CFrame = CFrame(Camera.CFrame.Position, Target.Position);
+                    if not Visible then
+                        Camera.CFrame = CFrame(Camera.CFrame.Position, Target.Position);
+                    end;
                     Weapon.firebullet();
                 end;
             end;
@@ -775,7 +716,7 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
     end;
 
     if Flags.WepRainbow and FindFirstChild(Camera, "Arms") then
-        for i,v in Pairs(GetChildren(Camera.Arms)) do
+        for i,v in GetChildren(Camera.Arms) do
             if IsA(v, "MeshPart") then
                 v.Color = fromHSV((Tick() / 5) % 1, 1, 1);
             end;

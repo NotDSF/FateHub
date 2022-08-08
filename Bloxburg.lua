@@ -276,6 +276,41 @@ local toppings = {
     ["rbxassetid://22360490"] = {"Nuts", { 927, 13, 1043 }}
 };
 
+jobsLoadedEvent.Event:Connect(function() 
+    wait(5);
+    if not settings.auto_farm.fisherman or JobHandler:GetJob() ~= "HutFisherman" then return end;
+
+    local hum = LocalPlayer.Character.Humanoid;
+    hum:MoveTo(Vector3.new(1059.00927734375, 13.679994583129883, 1080.4874267578125))
+    hum.MoveToFinished:Wait();
+
+    hum:MoveTo(Vector3.new(1020.7296142578125, 13.629997253417969, 1069.344970703125))
+    hum.MoveToFinished:Wait();
+
+    hum:MoveTo(Vector3.new(1018.0104370117188, 13.629997253417969, 1078.9429931640625))
+    hum.MoveToFinished:Wait();
+
+    while JobHandler:IsWorking() and settings.auto_farm.fisherman do
+        wait()
+        fireServer({
+            State = true,
+            Type = "UseFishingRod",
+            Pos = Vector3.new(1014.0109252929688, 8, 1090.2320556640625)
+        });
+    
+        local tnow = os.clock();
+        repeat wait() until game.Players.LocalPlayer.Character["Fishing Rod"].Bobber.Position.Y == 7;
+        
+        fireServer({
+            State = false,
+            Type = "UseFishingRod",
+            Time = os.clock() - tnow
+        });
+    
+        wait(2);
+    end;
+end);
+
 BensIceCreamEvent.Event:Connect(function(chatBar)
     if (not jobsLoaded) then
         print("loading job...");
@@ -533,6 +568,14 @@ autoFarm:Toggle("Auto IceCream", settings.auto_farm.ben, function(callback)
     end
     settings.auto_farm.ben = callback
 end);
+
+autoFarm:Toggle("Auto Fisherman", settings.auto_farm.fisherman, function(callback) 
+    if callback then
+        JobHandler:GoToWork("HutFisherman");
+    end;
+    settings.auto_farm.fisherman = callback;
+end)
+
 autoFarm:Toggle("Auto BloxyBurger", settings.auto_farm.buger_cashier, function(callback)
     if (callback) then
         task.spawn(JobHandler.GoToWork, JobHandler, "BloxyBurgersCashier");
