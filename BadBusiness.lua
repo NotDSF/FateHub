@@ -553,7 +553,7 @@ local getClosestPlayer = function()
 
     local localHitbox = findFirstChild(localChar, "Hitbox");
     for player, character in pairs(aliveCharacters) do
-        local hitbox = findFirstChild(character, "Hitbox");
+        local hitbox = findFirstChild(character, "Body");-- they changed all the names in the hitbox to random, this  is temp
         if (player ~= localPlayer and localHitbox and hitbox) then
             local localRoot = localChar.Root
             local redirect = findFirstChild(hitbox, aimbotSettings.lock_on);
@@ -884,7 +884,7 @@ initProjectile = hookfunction(TS.Projectiles.InitProjectile, function(...)
         local target_char = closestViewable
 
         if (rageSettings.auto_shoot and target_char) then
-            hitbox = target_char.Hitbox
+            hitbox = target_char.Body
             args[3] = hitbox[rageSettings.redirect].CFrame.Position - args[4]
             if (espSettings.bullet_tracers) then
                 createBeam(localCharacter, localCharacter.Root.CFrame.Position, args[3], args[4]);
@@ -893,7 +893,7 @@ initProjectile = hookfunction(TS.Projectiles.InitProjectile, function(...)
         end
 
         if (closestCharacter and closestPlayer) then
-            hitbox = closestCharacter.Hitbox
+            hitbox = closestCharacter.Body
             local viewable = GetPartsObscuringTarget(currentCamera, {currentCamera.CFrame.Position, hitbox[rageSettings.redirect].CFrame.Position}, {aliveCharacters[localPlayer], closestCharacter});
             if (rageSettings.silent_aim and #viewable == 0 or rageSettings.wallbang) then
                 args[3] = hitbox[rageSettings.redirect].CFrame.Position - args[4]
