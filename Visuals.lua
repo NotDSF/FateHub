@@ -120,9 +120,9 @@ function Visuals:AddHealthBar(character, root, humanoid, colourA, colorB, filled
         Color = colorB
     });
 	
-	if (not healthBarHealth or not healthBarOutline) then
-		return;
-	end
+    if (not healthBarHealth or not healthBarOutline) then
+        return;
+    end
 
     healthBarHealth.Filled = true
 
