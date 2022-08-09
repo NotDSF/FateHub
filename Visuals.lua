@@ -1,5 +1,5 @@
--- i am gonna redo this so it's alot better with more options too
-
+local currentCamera = workspace.CurrentCamera
+local viewportSize = currentCamera.ViewportSize
 
 local Visuals = {};
 Visuals.__index = Visuals
@@ -7,232 +7,145 @@ Visuals.__index = Visuals
 local DrawUtils = {};
 DrawUtils.__index = DrawUtils
 
-local color3New = Color3.new
-local fromRGB = Color3.fromRGB
-local cframeNew = CFrame.new
-local vector3New = Vector3.new
-local currentCamera = workspace.CurrentCamera
-local viewportSize = currentCamera.ViewportSize
-
-function DrawUtils:SetVisible(object, visible)
-    object.Visible = visible
-end
-
-function DrawUtils:SetProperties(object, properties)
-    for i, v in pairs(properties) do
-        object[i] = v
+function DrawUtils:Create(class, properties, ...)
+    local object = class.new(...);
+    for property, value in properties do
+        object[property] = value
     end
+
+    return object;
 end
 
-function Visuals.new()
-    Visuals.Objects = {
-        Line = {},
-        Text = {},
-        Box = {},
-        Chams = {},
-        Circle = {}
+local visualObjects = {};
+
+local emptyCFrame = CFrame.new();
+
+function Visuals.new(object, offset)
+    local self = {
+        drawings = {},
+        defaults = {
+            Color = Color3.new(1, 1, 1),
+            OutlineColor = Color3.new(1, 1, 1),
+            Size = 16,
+            Visible = true,
+            Thickness = 1,
+            Filled = false
+        }
     };
-    return setmetatable({}, Visuals);
+
+    local objectType = typeof(object);
+    self.object = object
+    if (objectType == "Instance") then
+        self.basePoint = PointInstance.new(object, offset or emptyCFrame);
+    elseif (objectType == "Vector3") then
+        self.basePoint = Point3D.new(object);
+    else
+        error(string.format("expected type Instance or Vector3, got %s.", objectType));
+    end
+
+    visualObjects[object] = self
+
+    return setmetatable(self, Visuals);
 end
 
-function Visuals:Add(object)
-    assert(typeof(object) == 'Instance' or typeof(object) == "Vector3");
-    local point = typeof(object) == "Instance" and PointInstance.new(object) or Point3D.new(object);
-
-    Visuals.Objects[point] = {};
-    local objectDrawings = Visuals.Objects[point]
-    local defaultColor = color3New(1, 1, 1);
-    local defaultColorSecondary = color3New();
-
-
-    local DrawEntry = {};
-    DrawEntry.__index = DrawEntry
-    function DrawEntry:AddText(text, options)
-        options = options or {};
-
-        local textDynamic = TextDynamic.new();
-        textDynamic.Position = options.Offset and PointInstance.new(object, CFrame.new(Vector3.new(unpack(options.Offset)))) or point
-        options.Offset = nil
-        DrawUtils:SetProperties(textDynamic, options);
-        textDynamic.Text = text
-        textDynamic.Color = options.Color or defaultColor
-        textDynamic.Outlined = options.Outlined or true   
-        textDynamic.OutlineColor = options.OutlineColor or defaultColorSecondary
-        textDynamic.Size = options.Size or 16
-
-        table.insert(objectDrawings, textDynamic);
-        table.insert(Visuals.Objects.Text, textDynamic);
-        return textDynamic;
+function Visuals:SetDefaults(drawing)
+    local __newindex = getrawmetatable(drawing).__newindex
+    for property, value in self.defaults do
+        pcall(__newindex, property, value);
     end
+    return drawing;
+end
 
-    function DrawEntry:AddTracer(from, options)
-        options = options or {};
-        from = from or Point2D.new(viewportSize.X / 2, viewportSize.Y);
+function Visuals:AddDrawing(drawing)
+    local drawings = self.drawings
+    drawings[#drawings + 1] = drawing
+    return drawing;
+end
 
-        local lineDynamic = LineDynamic.new();
-        lineDynamic.To = options.Offset and PointInstance.new(object, CFrame.new(Vector3.new(unpack(options.Offset)))) or point
-        options.Offset = nil
-        DrawUtils:SetProperties(lineDynamic, options);
-        lineDynamic.Color = options.Color or defaultColor
-        lineDynamic.Opacity = options.Opacity or 1
-        lineDynamic.Thickness = options.Thickness or 1.6 
+function Visuals:AddText(text, properties)
+    local Text = DrawUtils:Create(TextDynamic, properties or {});
+    Text.Position = self.basePoint
+    Text.Text = text
 
-        lineDynamic.From = from
+    self:SetDefaults(Text);
+    self:AddDrawing(Text);
 
-        table.insert(objectDrawings, lineDynamic);
-        table.insert(Visuals.Objects.Line, lineDynamic);
-        return lineDynamic;
-    end
+    return Text;
+end
 
-    function DrawEntry:Add2DBox(tPoint, bPoint, options)
-        options = options or {};
+function Visuals:AddTracer(from, properties)
+    local Line = DrawUtils:Create(LineDynamic, properties or {});
+    Line.From = from or Point2D.new(viewportSize.X / 2, viewportSize.Y);
+    Line.To = self.basePoint
+
+    self:SetDefaults(Line);
+    self:AddDrawing(Line);
+
+    return Line;
+end
+
+function Visuals:Add2DBox(object, offset1, offset2, properties)
+    object = object or self.object
+    if (typeof(object) == "Instance" and object:IsA("Part")) then
         local objectSize = object.Size
-        tPoint = PointInstance.new(object, cframeNew(tPoint or vector3New(objectSize.X, objectSize.Y, 0)));
-        bPoint = PointInstance.new(object, cframeNew(bPoint or vector3New(-objectSize.X, -objectSize.Y, 0)));
+
+        local tPoint = PointInstance.new(object, offset1 or CFrame.new(objectSize.X, objectSize.Y, 0));
+        local bPoint = PointInstance.new(object, offset2 or CFrame.new(-objectSize.X, -objectSize.Y, 0));
         tPoint.RotationType = CFrameRotationType.CameraRelative
         bPoint.RotationType = CFrameRotationType.CameraRelative
 
-        local rectDynamic = RectDynamic.new(tPoint, bPoint);
-        DrawUtils:SetProperties(rectDynamic, options);
-        rectDynamic.Thickness = options.Thickness or 1
-        rectDynamic.Color = options.Color or defaultColor
-        rectDynamic.Outlined = options.Outlined or true
-        rectDynamic.OutlineColor = options.OutlineColor or defaultColorSecondary 
-        rectDynamic.Filled = options.Filled or false
+        local _Rect = DrawUtils:Create(RectDynamic, properties or {}, tPoint, bPoint);
 
-        table.insert(objectDrawings, rectDynamic);
-        table.insert(Visuals.Objects.Box, rectDynamic);
-        return rectDynamic;
-    end
+        self:SetDefaults(_Rect);
+        self:AddDrawing(_Rect);
 
-    function DrawEntry:Add3DBox(pos, options)
-        options = options or {};
-    end
-
-    function DrawEntry:AddCircle(size, options)
-        options = options or {};
-
-        local circleDynamic = CircleDynamic.new(options.Offset);
-        options.Offset = nil
-        DrawUtils:SetProperties(circleDynamic, options);
-        circleDynamic.Radius = size
-        circleDynamic.Color = options.Color or defaultColor
-        circleDynamic.Thickness = options.Thickness or .1
-        circleDynamic.Opacity = options.Opacity or 1
-        circleDynamic.Position = point
-
-        table.insert(Visuals.Objects.Circle, circleDynamic);
-        table.insert(objectDrawings, circleDynamic);
-        return circleDynamic;
-    end
-
-    function DrawEntry:AddChams(color, options)
-        options = options or {};
-
-        local highlight = Instance.new("Highlight");
-        DrawUtils:SetProperties(highlight, options);
-        highlight.FillColor = color or defaultColor
-        highlight.Adornee = options.Adornee or object
-        highlight.Parent = gethui();
-        local proxy = setmetatable({_INSTANCE=highlight}, {
-            __newindex = function(self, prop, value)
-                if (prop == "Visible") then
-                    highlight.Enabled = value
-                end
-            end,
-            __index = function(self, prop)
-                return highlight[prop]
-            end
-        });
-
-        table.insert(Visuals.Objects.Chams, proxy);
-        table.insert(objectDrawings, proxy);
-        return proxy;
-    end
-
-    function DrawEntry:Destroy()
-        for i, drawing in pairs(objectDrawings) do
-            local type = type(drawing);
-			if (type == "table") then
-                drawing.Adornee = nil
-                continue;
-            elseif (type ~= "string") then
-				DrawUtils:SetVisible(drawing, false);
-				objectDrawings[i] = nil
-			end
-        end
-    end
-
-    function DrawEntry:Get(drawingType)
-        if (not drawingType) then
-            return objectDrawings;
-        end
-        local found = {}
-        for i, objdrawing in pairs(objectDrawings) do
-            local type = typeof(objdrawing)
-            if (type == drawingType) then
-                found[#found + 1] = objdrawing;
-            end
-            if (type == "table" and drawingType == "Chams") then
-                return objdrawing;
-            end
-        end
-        return unpack(found);
-    end
-
-    return DrawEntry;
-end
-
-function Visuals:Render()
-    for pInstance, drawingsForObject in pairs(Visuals.Objects) do
-        for i, drawing in pairs(drawingsForObject) do
-            DrawUtils:SetVisible(drawing, true);
-        end
+        return _Rect, tPoint, bPoint;
     end
 end
 
-function Visuals:SetProperties(obj, props)
-    if (type(obj) == "table") then
-        for i, object in pairs(obj) do
-            local drawingsForObject = Visuals.Objects[object]
-            for _, drawing in pairs(drawingsForObject) do
-                for i2, value in pairs(props) do
-                    drawing[i2] = value
-                end
-            end
-        end
-    else
-        local drawingsForObject = Visuals.Objects[obj]
-        for i, drawing in pairs(drawingsForObject) do
-            for i2, value in pairs(props) do
-                drawing[i2] = value
-            end
-        end
+function Visuals:AddHealthBar(character, root, humanoid, colourA, colorB, filled)
+    local characterSize = character:GetExtentsSize();
+
+    local offset1 = CFrame.new(characterSize.X / 2 + .5, characterSize.Y / 2, 0);
+    local offset2 = CFrame.new(characterSize.X / 2 + 1, -characterSize.Y / 2, 0);
+
+    local healthBarOutline, tPoint, bPoint = self:Add2DBox(root, offset1, offset2, {
+        Color = colourA,
+        OutlineColor = Color3.new(1, 1, 1),
+        OutlineThickness = 2,
+        ZIndex = 2,
+        Filled = filled or false
+    });
+    local healthBarHealth, tPoint1 = self:Add2DBox(root, offset1, offset2, {
+        Color = colorB
+    });
+	
+	if (not healthBarHealth or not healthBarOutline) then
+		return;
+	end
+
+    healthBarHealth.Filled = true
+
+    if (filled) then
+        tPoint.Offset = CFrame.new(characterSize.X / 2 + .1, characterSize.Y / 2 + .1, 0);
+        bPoint.Offset = CFrame.new(characterSize.X / 2 + .1, -characterSize.Y / 2 + .1, 0);
+        healthBarOutline.ZIndex = 1
     end
+
+    humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+        local newHealth, maxHealth = humanoid.Health, humanoid.MaxHealth
+        local percentage = newHealth / maxHealth
+        local max = offset1.Y
+        local newSize = (max * 2) * percentage - max
+        tPoint1.Offset = CFrame.new(offset1.X, newSize, 0);
+    end);
 end
 
 function Visuals:Destroy()
-    for pInstance, drawingsForObject in pairs(Visuals.Objects) do
-        for i, drawing in pairs(drawingsForObject) do
-            if (type(drawing) == "table") then
-                drawing.Adornee = nil
-            end
-            DrawUtils:SetVisible(drawing, false);
-            drawingsForObject[i] = nil
-        end
-        drawingsForObject[pInstance] = nil
+    for i, drawing in pairs(self.drawings) do
+        drawing.Visible = false
     end
+    table.clear(self.drawings);
 end
 
-
 return Visuals;
-
--- local Visuals = Visuals.new();
--- local Drawing = Visuals:Add(game.Players.LocalPlayer.Character.HumanoidRootPart);
--- Drawing:AddText("Name", {
---     Offset = {0, 3}
--- });
-
--- wait(3);
-
--- Drawing:Destroy();
