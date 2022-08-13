@@ -130,8 +130,8 @@ function Visuals:Add2DBox(object, offset1, offset2, properties)
     end
 end
 
-function Visuals:AddHealthBar(character, root, colourA, colorB, filled, humanoid)
-    local characterSize = character:GetExtentsSize();
+function Visuals:AddHealthBar(character, root, colourA, colorB, filled, humanoid, size)
+    local characterSize = size or character:GetExtentsSize();
 
     local offset1 = CFrame.new(characterSize.X / 2 + .5, characterSize.Y / 2, 0);
     local offset2 = CFrame.new(characterSize.X / 2 + 1, -characterSize.Y / 2, 0);
@@ -156,11 +156,11 @@ function Visuals:AddHealthBar(character, root, colourA, colorB, filled, humanoid
     end
 
 
-    local drawings = self.drawings
-    drawings[#drawings + 1] = {
-        drawing = {healthBarOutline, healthBarHealth},
-        type = "HealthBar"
-    };
+    for i, drawingData in pairs(self.drawings) do
+        if (drawingData.drawing == healthBarOutline or drawingData.drawing == healthBarHealth) then
+            self.drawings[i] = nil
+        end
+    end
 
     local updateHealth = function(_self, currentHealth, maxHealth)
         local percentage = currentHealth / maxHealth
@@ -183,10 +183,20 @@ function Visuals:AddHealthBar(character, root, colourA, colorB, filled, humanoid
         end);
     end
 
-    return {
+	local ret = {
         UpdateHealth = updateHealth,
-        SetFilled = setFilled
+        SetFilled = setFilled,
+		healthBarHealth = healthBarHealth,
+		healthBarOutline = healthBarOutline
     };
+
+	local drawings = self.drawings
+    drawings[#drawings + 1] = {
+        drawing = ret,
+        type = "HealthBar"
+    };
+
+    return ret;
 end
 
 function Visuals:Destroy()
@@ -196,7 +206,7 @@ function Visuals:Destroy()
     table.clear(self.drawings);
 end
 
-function Visuals:GetDrawings(drawingType)
+function Visuals:GetDrawings(drawingType, first)
     local results = {};
     for i, drawingData in pairs(self.drawings) do
         if (drawingType == nil or drawingType == drawingData.type) then
@@ -204,7 +214,7 @@ function Visuals:GetDrawings(drawingType)
         end
     end
 
-    return results;
+    return first and results[1] or results;
 end
 
 function Visuals:GetAllDrawings()
@@ -212,8 +222,9 @@ function Visuals:GetAllDrawings()
 end
 
 function Visuals:SetProperties(drawingType, values)
-    for i, drawingData in pairs(allDrawings) do
-        if (drawingType == nil or drawingType == drawingData.type) then
+	local t = type(drawingType) == "table";
+	for i, drawingData in pairs(self.drawings) do
+        if (drawingType == nil or drawingType == drawingData.type or (t and table.find(drawingType, drawingData.type))) then
             for property, value in pairs(values) do
                 drawingData.drawing[property] = value
             end
@@ -221,6 +232,17 @@ function Visuals:SetProperties(drawingType, values)
     end
 end
 
+function Visuals:SetAllProperties(drawingType, values)
+	local t = type(drawingType) == "table";
+    for i, drawingData in pairs(allDrawings) do
+		local _type = drawingData.type
+        if ((drawingType == nil or drawingType == _type or (t and table.find(drawingType, type))) and not t == "HealthBar") then
+            for property, value in pairs(values) do
+                drawingData.drawing[property] = value
+            end
+        end
+    end
+end
 
 --[[
 local players = game:GetService("Players"):GetPlayers();

@@ -1,6 +1,5 @@
 local UILibrary = loadfile("UILibrary.lua")();
-local VisualsLib = loadfile("Visuals.lua")();
-local Visuals = VisualsLib.new();
+local Visuals = loadfile("Visuals.lua")();
 local services = setmetatable({}, {
     __index = function(self, serviceName)
         local good, service = pcall(game.GetService, game, serviceName);
@@ -61,19 +60,29 @@ local getbodyparts = filtergc("function", {
 local gethealthstate = filtergc("function", {
     Name = "gethealthstate"
 })[1]
-local gethealth;
-do
-    for i, func in pairs(filtergc("function", {
-        Name = "gethealth"
-    })) do
-        if (#debug.getupvalues(func) == 1) then
-            gethealth = func
-        end
-    end
-end
 local setcharacterhash = filtergc("function", {
     Name = "setcharacterhash"
 })[1]
+
+local f = nil
+local up = nil
+local gethealth = function(player)
+    if (not up) then
+        for i, gethealth in filtergc("function", {
+            Name = "gethealth"
+        }) do
+            if (#debug.getupvalues(gethealth) == 2) then
+                up = debug.getupvalue(gethealth, 1);
+                local playerData = up[player]
+                return playerData.health0, playerData.maxhealth;
+            end
+        end
+    else
+        local playerData = up[player]
+        return playerData.health0, playerData.maxhealth;
+    end
+    return 0, 0
+end
 
 local players = {};
 local characters = debug.getupvalue(getbodyparts, 1);
@@ -285,28 +294,30 @@ snapLine.From = Point2D.new(mouseVector);
 local addPlayerDrawings = function(player, char)
     if (player == localPlayer) then return; end;
     local root = findFirstChild(char, "Torso");
-    local charVisuals = Visuals:Add(root);
+    local charVisuals = Visuals.new(root);
     local esp_enabled = espSettings.enabled
     charVisuals:AddText(player.Name, {
-        Offset = {0, 4},
         Color = espSettings.color,
         Visible = esp_enabled and espSettings.names_enabled
-    });
+    }, CFrame.new(0, 4, 0));
     charVisuals:AddTracer(nil, {
-        Offset = {0, 1},
         Color = espSettings.color,
         Visible = esp_enabled and espSettings.tracers_enabled
-    });
-    charVisuals:AddChams(espSettings.chams_color, {
-        Adornee = char,
-        Enabled = esp_enabled and espSettings.chams_enabled,
-        FillColor = espSettings.chams_color,
-        OutlineColor = espSettings.chams_outline_color
-    });
-    charVisuals:Add2DBox(vector3new(root.Size.X, root.Size.Y), vector3new(-root.Size.X, -root.Size.Y), {
+    }, CFrame.new(0, 1,  0));
+    -- charVisuals:AddChams(espSettings.chams_color, {
+    --     Adornee = char,
+    --     Enabled = esp_enabled and espSettings.chams_enabled,
+    --     FillColor = espSettings.chams_color,
+    --     OutlineColor = espSettings.chams_outline_color
+    -- });
+    local characterSize = char:GetExtentsSize();
+    charVisuals:Add2DBox(root, nil, nil, {
         Color = espSettings.box_color,
         Visible = esp_enabled and espSettings.box_esp
     });
+
+    local healthBar = charVisuals:AddHealthBar(root, root, Color3.new(1, 1, 1), Color3.new(0, 1, 0), false, nil, root.Size * 2);
+
     drawEntries[player] = charVisuals
 end
 
@@ -411,33 +422,47 @@ local getClosestPlayer = function()
         end
 
         local notBlacklisted = not tfind(espSettings.show_teams, teamsPlayers[player]);
-        if (espSettings.enabled and inRenderDistance and visible and notBlacklisted) then
+        if (espSettings.enabled and inRenderDistance and notBlacklisted) then
             local drawEntry = drawEntries[player]
-            local text = drawEntry:Get("TextDynamic");
-            local tracer = drawEntry:Get("LineDynamic");
-            local box, healthbarout, healthbar = drawEntry:Get("RectDynamic");
+            local teamColor = espSettings.team_colors and player.TeamColor.Color or nil
             local health, maxhealth = gethealth(player);
-            text.Text = format("%s\n%s%s",
-                espSettings.names_enabled and player.Name or "",
-                espSettings.distance_enabled and format("[%s]", floor(vector3Magnitude)) or "",
-                espSettings.health_enabled and format(" [%s/%s]", floor(health), maxhealth) or ""
-            );
 
-            if (espSettings.team_colors) then
-                local teamColor = player.TeamColor.Color
-                text.Color = teamColor
-                tracer.Color = teamColor
-                box.Color = teamColor
+            drawEntry:SetProperties("TextDynamic", {
+                Text = format("%s\n%s%s",
+                    espSettings.names_enabled and player.Name or "",
+                    espSettings.distance_enabled and format("[%s]", floor(vector3Magnitude)) or "",
+                    espSettings.health_enabled and format(" [%s/%s]", floor(health), maxhealth) or ""
+                ),
+                Color = teamColor,
+                Visible = espSettings.names_enabled
+            });
+
+            drawEntry:SetProperties("LineDynamic", {
+                Color = teamColor,
+                Visible = espSettings.tracers_enabled
+            });
+
+            drawEntry:SetProperties("RectDynamic", {
+                Color = teamColor,
+                Visible = espSettings.box_esp
+            });
+
+            drawEntry:SetProperties("HealthBar",  {
+                Visible = espSettings.health_enabled
+            });
+            local healthBar = drawEntry:GetDrawings("HealthBar", true);
+            if (healthBar) then
+                healthBar:UpdateHealth(health, maxhealth);
             end
-
-            tracer.Visible = espSettings.tracers_enabled
-            text.Visible = espSettings.names_enabled
-            box.Visible = espSettings.box_esp
-
         else
             local drawEntry = drawEntries[player]
-            for index, drawing in pairs(drawEntry:Get()) do
-                drawing.Visible = false
+            for index, drawing in pairs(drawEntry:GetDrawings()) do
+                if (type(drawing) == "table") then
+                    drawing.healthBarHealth.Visible = false
+                    drawing.healthBarOutline.Visible = false
+                else
+                    drawing.Visible = false
+                end
             end
         end
     end
@@ -574,25 +599,16 @@ players_esp:SetLeft();
 local team_colors = espSettings.team_colors
 players_esp:Toggle("Enable Esp", espSettings.enabled, function(callback)
     espSettings.enabled = callback
-    Visuals:SetProperties("Box", {
-        Visible = callback and espSettings.box_esp
-    });
-    Visuals:SetProperties("Chams", {
-        Visible = callback and espSettings.chams_enabled
-    });
-    Visuals:SetProperties("Text", {
-        Visible = callback and espSettings.names_enabled
-    });
-    Visuals:SetProperties("Line", {
-        Visible = callback and espSettings.tracers_enabled
+    Visuals:SetAllProperties(nil, {
+        Visible = callback
     });
 end):Colorpicker(espSettings.color, function(callback)
     espSettings.team_colors = false
     espSettings.color = callback
-    Visuals:SetProperties({"Box", "Text", "Line"}, {
+    Visuals:SetAllProperties(nil, {
         Color = callback
     });
-    Visuals:SetProperties("Chams", {
+    Visuals:SetAllProperties("Chams", {
         FillColor = callback
     });
 end);
@@ -605,58 +621,61 @@ players_esp:Toggle("Show Health", espSettings.health_enabled, function(callback)
 end);
 players_esp:Toggle("Health bar", espSettings.healthbar_enabled, function(callback)
     espSettings.healthbar_enabled = true
+    Visuals:SetAllProperties("HealthBar", {
+        Visible = callback
+    });
 end);
 players_esp:Toggle("Show Distance", espSettings.distance_enabled, function(callback)
     espSettings.distance_enabled = callback
 end);
 players_esp:Toggle("Box Esp", espSettings.box_esp, function(callback)
     espSettings.box_esp = callback
-    Visuals:SetProperties("Box", {
+    Visuals:SetAllProperties("RectDynamic", {
         Visible = callback
     });
 end):Colorpicker(espSettings.box_color, function(callback)
     espSettings.box_color = callback
-    Visuals:SetProperties("Box", {
+    Visuals:SetAllProperties("RectDynamic", {
         Color = callback
     });
 end);
 players_esp:Toggle("Enable Chams", espSettings.chams_enabled, function(callback)
     espSettings.chams_enabled = callback
-    Visuals:SetProperties("Chams", {
+    Visuals:SetAllProperties("Chams", {
         Visible = callback
     });
 end):Colorpicker(espSettings.chams_color, function(callback)
     espSettings.chams_color = callback
-    Visuals:SetProperties("Chams", {
+    Visuals:SetAllProperties("Chams", {
         FillColor = callback
     });
 end);
 players_esp:Toggle("Enable Tracers", espSettings.tracers_enabled, function(callback)
     espSettings.tracers_enabled = callback
-    Visuals:SetProperties("Line", {
+    Visuals:SetAllProperties("LineDynamic", {
         Visible = callback
     });
 end):Colorpicker(espSettings.tracer_color, function(callback)
     espSettings.tracer_color = callback
-    Visuals:SetProperties("Line", {
+    Visuals:SetAllProperties("LineDynamic", {
         Color = callback
     });
 end);
 players_esp:Toggle("Chams Outline", espSettings.chams_outline, function(callback)
     espSettings.chams_outline = callback
-    Visuals:SetProperties("Chams", {
+    Visuals:SetAllProperties("Chams", {
         OutlineTransparency = callback and 0 or 1
     });
 end):Colorpicker(espSettings.chams_outline_color, function(callback)
     espSettings.chams_outline_color = callback
-    Visuals:SetProperties("Chams", {
+    Visuals:SetAllProperties("Chams", {
         OutlineColor = callback
     });
 end);
 players_esp:Toggle("Team Colors", team_colors, function(callback)
     espSettings.team_colors = callback
     if (not callback) then
-        Visuals:SetProperties({"Line", "Text", "Box"}, {
+        Visuals:SetAllProperties({"Line", "Text", "Box"}, {
             Color = espSettings.color
         });
     end
@@ -693,7 +712,7 @@ players_esp:Dropdown("Tracer From", "Bottom", {"Top", "Bottom", "Left", "Right"}
         Left = vector2new(viewportSize.X - viewportSize.X, viewportSize.Y / 2),
         Right = vector2new(viewportSize.X, viewportSize.Y / 2)
     };
-    Visuals:SetProperties("Line", {
+    Visuals:SetAllProperties("LineDynamic", {
         From = Point2D.new(positions[callback]);
     });
 end);
