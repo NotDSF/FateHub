@@ -162,6 +162,10 @@ local function GetClosestPlayer(novisible, maxdistance)
             end;
 
             local Character = v.Character;
+            if not v.Status.Alive.Value then
+                continue;
+            end;
+
             local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
 
             if HumanoidRootPart then
@@ -199,6 +203,10 @@ local function GetClosestPlayerFromVector2(pos)
             end;
 
             local Character = v.Character;
+            if not v.Status.Alive.Value then
+                continue;
+            end;
+
             local HumanoidRootPart = Character and FindFirstChild(Character, "HumanoidRootPart");
 
             if HumanoidRootPart then
@@ -580,41 +588,48 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
         for i,v in ESPObjects do
             local Player = v.Player;
             local Character = v.Character;
-            local Distance = floor((LocalPlayer.Character.Head.Position - Character.Head.Position).magnitude);
-            local Rect, Text, HealthBar = v.Rect, v.Text, v.HealthBar;
 
-            Text.Visible = Distance < Flags.ESPMaxDistance;
-            Rect.Visible = Distance < Flags.ESPMaxDistance;
-            HealthBar.Visible = Distance < Flags.ESPMaxDistance;
-
-            if Distance < Flags.ESPMaxDistance then
-                Rect.Outlined = Flags.BoxOutline;
-                Rect.Thickness = Flags.ESPBoxThickness;
-
-                Text.Outlined = Flags.TextOutline;
-                Text.Size = Flags.TextSize;
-
-                if Flags.TextOffset ~= v.TextPoint.Offset then
-                    v.TextPoint.Offset = Flags.TextOffset;
+            if Player.Status.Alive.Value then
+                local Distance = floor((LocalPlayer.Character.Head.Position - Character.Head.Position).magnitude);
+                local Rect, Text, HealthBar = v.Rect, v.Text, v.HealthBar;
+    
+                Text.Visible = Distance < Flags.ESPMaxDistance;
+                Rect.Visible = Distance < Flags.ESPMaxDistance;
+                HealthBar.Visible = Distance < Flags.ESPMaxDistance;
+    
+                if Distance < Flags.ESPMaxDistance then
+                    Rect.Outlined = Flags.BoxOutline;
+                    Rect.Thickness = Flags.ESPBoxThickness;
+    
+                    Text.Outlined = Flags.TextOutline;
+                    Text.Size = Flags.TextSize;
+    
+                    if Flags.TextOffset ~= v.TextPoint.Offset then
+                        v.TextPoint.Offset = Flags.TextOffset;
+                    end;
+    
+                    -- I hate this CODE
+                    if IsTeam(LocalPlayer, Character) then
+                        Color = Flags.ESPTeamColor;
+                        Text.Visible = Flags.ShowTeam;
+                        Rect.Visible = Flags.ShowTeam;
+                        HealthBar.Visible = Flags.ShowTeam;
+                    else
+                        Color = Flags.ESPEnemyColor;
+                        Text.Visible = Flags.ShowEnemy;
+                        Rect.Visible = Flags.ShowEnemy;
+                        HealthBar.Visible = Flags.ShowEnemy;
+                    end;
+                    
+                    v.HealthBarTop.Offset = CFrame(Vector3(-2.6, math.clamp(3 + ((-6 / 100) * (100 - Player.NRPBS.Health.Value)), 0, 3), 0));
+                    Text.Text = format("%s | %d | [%d | 100]", Player.Name, Distance, Player.NRPBS.Health.Value);
+                    Text.Color = Color;
+                    Rect.Color = Color;
                 end;
-
-                -- I hate this CODE
-                if IsTeam(LocalPlayer, Character) then
-                    Color = Flags.ESPTeamColor;
-                    Text.Visible = Flags.ShowTeam;
-                    Rect.Visible = Flags.ShowTeam;
-                    HealthBar.Visible = Flags.ShowTeam;
-                else
-                    Color = Flags.ESPEnemyColor;
-                    Text.Visible = Flags.ShowEnemy;
-                    Rect.Visible = Flags.ShowEnemy;
-                    HealthBar.Visible = Flags.ShowEnemy;
-                end;
-                
-                v.HealthBarTop.Offset = CFrame(Vector3(-2.6, math.clamp(3 + ((-6 / 100) * (100 - Player.NRPBS.Health.Value)), 0, 3), 0));
-                Text.Text = format("%s | %d | [%d | 100]", Player.Name, Distance, Player.NRPBS.Health.Value);
-                Text.Color = Color;
-                Rect.Color = Color;
+            else
+                v.Text.Visible = false;
+                v.Rect.Visible = false;
+                v.HealthBar.Visible = false;
             end;
         end;
     end;
@@ -625,20 +640,24 @@ Game.RunService.RenderStepped.Connect(Game.RunService.RenderStepped, function()
             local Character = v.Character;
             local Distance = floor((LocalPlayer.Character.Head.Position - Character.Head.Position).magnitude) < Flags.ESPMaxDistance;
 
-            v.Line.Visible = Distance;
-            
-            if Distance then
-                v.Line.To.PointVec2 = LineOffset;
+            if Player.Status.Alive.Value then
+                v.Line.Visible = Distance;
+                
+                if Distance then
+                    v.Line.To.PointVec2 = LineOffset;
 
-                if IsTeam(LocalPlayer, Character) then
-                    Color = Flags.ESPTeamColor;
-                    v.Line.Visible = Flags.ShowTeam;
-                else
-                    Color = Flags.ESPEnemyColor;
-                    v.Line.Visible = Flags.ShowEnemy;
+                    if IsTeam(LocalPlayer, Character) then
+                        Color = Flags.ESPTeamColor;
+                        v.Line.Visible = Flags.ShowTeam;
+                    else
+                        Color = Flags.ESPEnemyColor;
+                        v.Line.Visible = Flags.ShowEnemy;
+                    end;
+        
+                    v.Line.Color = Color;
                 end;
-    
-                v.Line.Color = Color;
+            else
+                v.Line.Visible = false;
             end;
         end;
     end;
