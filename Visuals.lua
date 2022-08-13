@@ -17,6 +17,7 @@ function DrawUtils:Create(class, properties, ...)
 end
 
 local visualObjects = {};
+local allDrawings = {};
 
 local emptyCFrame = CFrame.new();
 
@@ -25,16 +26,21 @@ function Visuals.new(object, offset)
         drawings = {},
         defaults = {
             Color = Color3.new(1, 1, 1),
-            OutlineColor = Color3.new(1, 1, 1),
-            Size = 16,
+            Outlined = true,
+            OutlineColor = Color3.new(0, 0, 0),
+            Size = 17,
             Visible = true,
             Thickness = 1,
             Filled = false
-        }
+        },
+        visualObjects = visualObjects
     };
 
     local objectType = typeof(object);
     self.object = object
+    self.objectType = objectType
+    self.baseOffset = offset or emptyCFrame
+
     if (objectType == "Instance") then
         self.basePoint = PointInstance.new(object, offset or emptyCFrame);
     elseif (objectType == "Vector3") then
@@ -48,62 +54,83 @@ function Visuals.new(object, offset)
     return setmetatable(self, Visuals);
 end
 
-function Visuals:SetDefaults(drawing)
+function Visuals:SetDefaults(drawing, properties)
     local __newindex = getrawmetatable(drawing).__newindex
     for property, value in self.defaults do
-        pcall(__newindex, property, value);
+        if (properties[property] == nil) then
+            pcall(__newindex, drawing, property, value);
+        end
     end
     return drawing;
 end
 
+function Visuals:MakePosition(offset)
+    if (offset) then
+        if (self.objectType == "Instance") then
+            return PointInstance.new(self.object, self.baseOffset * offset);
+        elseif (self.objectType == "Vector3") then
+            return Point3D.new(self.object + offset);
+        end
+    end
+    return self.basePoint;
+end
+
 function Visuals:AddDrawing(drawing)
     local drawings = self.drawings
-    drawings[#drawings + 1] = drawing
+    drawings[#drawings + 1] = {
+        drawing = drawing,
+        type = typeof(drawing)
+    };
+	allDrawings[#allDrawings + 1] = drawings[#drawings]
     return drawing;
 end
 
-function Visuals:AddText(text, properties)
-    local Text = DrawUtils:Create(TextDynamic, properties or {});
-    Text.Position = self.basePoint
+function Visuals:AddText(text, properties, offset)
+    properties = properties or {};
+    local Text = DrawUtils:Create(TextDynamic, properties);
+    Text.Position = self:MakePosition(offset);
     Text.Text = text
 
-    self:SetDefaults(Text);
+    self:SetDefaults(Text, properties);
     self:AddDrawing(Text);
+
 
     return Text;
 end
 
-function Visuals:AddTracer(from, properties)
-    local Line = DrawUtils:Create(LineDynamic, properties or {});
+function Visuals:AddTracer(from, properties, offset)
+    properties = properties or {};
+    local Line = DrawUtils:Create(LineDynamic, properties);
     Line.From = from or Point2D.new(viewportSize.X / 2, viewportSize.Y);
-    Line.To = self.basePoint
+    Line.To = self:MakePosition(offset);
 
-    self:SetDefaults(Line);
+    self:SetDefaults(Line, properties);
     self:AddDrawing(Line);
 
     return Line;
 end
 
 function Visuals:Add2DBox(object, offset1, offset2, properties)
+    properties = properties or {};
     object = object or self.object
-    if (typeof(object) == "Instance" and object:IsA("Part")) then
-        local objectSize = object.Size
+    if (typeof(object) == "Instance" and object:IsA("Part") or object:IsA("Model")) then
+        local objectSize = object:IsA("Model") and object:GetExtentsSize() or object.Size
 
         local tPoint = PointInstance.new(object, offset1 or CFrame.new(objectSize.X, objectSize.Y, 0));
         local bPoint = PointInstance.new(object, offset2 or CFrame.new(-objectSize.X, -objectSize.Y, 0));
         tPoint.RotationType = CFrameRotationType.CameraRelative
         bPoint.RotationType = CFrameRotationType.CameraRelative
 
-        local _Rect = DrawUtils:Create(RectDynamic, properties or {}, tPoint, bPoint);
+        local _Rect = DrawUtils:Create(RectDynamic, properties, tPoint, bPoint);
 
-        self:SetDefaults(_Rect);
+        self:SetDefaults(_Rect, properties);
         self:AddDrawing(_Rect);
 
         return _Rect, tPoint, bPoint;
     end
 end
 
-function Visuals:AddHealthBar(character, root, humanoid, colourA, colorB, filled)
+function Visuals:AddHealthBar(character, root, colourA, colorB, filled, humanoid)
     local characterSize = character:GetExtentsSize();
 
     local offset1 = CFrame.new(characterSize.X / 2 + .5, characterSize.Y / 2, 0);
@@ -112,40 +139,104 @@ function Visuals:AddHealthBar(character, root, humanoid, colourA, colorB, filled
     local healthBarOutline, tPoint, bPoint = self:Add2DBox(root, offset1, offset2, {
         Color = colourA,
         OutlineColor = Color3.new(1, 1, 1),
-        OutlineThickness = 2,
-        ZIndex = 2,
-        Filled = filled or false
+        OutlineThickness = 1,
+        Outlined = not not filled,
+        Filled = filled or false,
+        ZIndex = filled and 1 or 2
     });
     local healthBarHealth, tPoint1 = self:Add2DBox(root, offset1, offset2, {
-        Color = colorB
+        Color = colorB,
+        Outlined = false,
+        Filled = true,
+        ZIndex = filled and 2 or 1
     });
-	
+
     if (not healthBarHealth or not healthBarOutline) then
         return;
     end
 
-    healthBarHealth.Filled = true
 
-    if (filled) then
-        tPoint.Offset = CFrame.new(characterSize.X / 2 + .1, characterSize.Y / 2 + .1, 0);
-        bPoint.Offset = CFrame.new(characterSize.X / 2 + .1, -characterSize.Y / 2 + .1, 0);
-        healthBarOutline.ZIndex = 1
-    end
+    local drawings = self.drawings
+    drawings[#drawings + 1] = {
+        drawing = {healthBarOutline, healthBarHealth},
+        type = "HealthBar"
+    };
 
-    humanoid:GetPropertyChangedSignal("Health"):Connect(function()
-        local newHealth, maxHealth = humanoid.Health, humanoid.MaxHealth
-        local percentage = newHealth / maxHealth
+    local updateHealth = function(_self, currentHealth, maxHealth)
+        local percentage = currentHealth / maxHealth
         local max = offset1.Y
         local newSize = (max * 2) * percentage - max
         tPoint1.Offset = CFrame.new(offset1.X, newSize, 0);
-    end);
+    end
+
+    local setFilled = function(_self, _filled)
+        healthBarOutline.Filled = _filled or false
+        healthBarOutline.Outlined = _filled
+        healthBarOutline.ZIndex = _filled and 1 or 2
+
+        healthBarHealth.ZIndex = filled and 2 or 1
+    end
+
+    if (humanoid) then
+        humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+            updateHealth(humanoid.Health, humanoid.MaxHealth);
+        end);
+    end
+
+    return {
+        UpdateHealth = updateHealth,
+        SetFilled = setFilled
+    };
 end
 
 function Visuals:Destroy()
-    for i, drawing in pairs(self.drawings) do
-        drawing.Visible = false
+    for i, drawingData in pairs(self.drawings) do
+        drawingData.drawing.Visible = false
     end
     table.clear(self.drawings);
 end
+
+function Visuals:GetDrawings(drawingType)
+    local results = {};
+    for i, drawingData in pairs(self.drawings) do
+        if (drawingType == nil or drawingType == drawingData.type) then
+            results[#results + 1] = drawingData.drawing
+        end
+    end
+
+    return results;
+end
+
+function Visuals:GetAllDrawings()
+    return allDrawings;
+end
+
+function Visuals:SetProperties(drawingType, values)
+    for i, drawingData in pairs(allDrawings) do
+        if (drawingType == nil or drawingType == drawingData.type) then
+            for property, value in pairs(values) do
+                drawingData.drawing[property] = value
+            end
+        end
+    end
+end
+
+
+--[[
+local players = game:GetService("Players"):GetPlayers();
+
+local localplayer = game.Players.LocalPlayer
+for i, player in pairs(players) do
+    if (player.Character and player ~= localplayer) then
+        local character = player.Character
+        local root = character:FindFirstChild("HumanoidRootPart");
+        local Visual = Visuals.new(root, CFrame.new(0, 4, 0));
+        Visual:AddText(player.Name);
+        Visual:AddTracer(nil, nil, CFrame.new(0, -2, 0));
+        Visual:AddHealthBar(character, root, Color3.new(1, 1, 1), Color3.new(0, 1, 0), false, character.Humanoid);
+        local size = character:GetExtentsSize();
+        Visual:Add2DBox(root, CFrame.new(size.X / 2, size.Y / 2, 0), CFrame.new(-size.X / 2, -size.Y / 2, 0));
+    end
+end]]
 
 return Visuals;
