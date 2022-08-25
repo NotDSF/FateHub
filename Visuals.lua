@@ -55,10 +55,11 @@ function Visuals.new(object, offset)
 end
 
 function Visuals:SetDefaults(drawing, properties)
-    local __newindex = getrawmetatable(drawing).__newindex
     for property, value in self.defaults do
-        if (properties[property] == nil) then
-            pcall(__newindex, drawing, property, value);
+        if (properties[property] == nil and drawing[property] ~= nil) then
+            pcall(function()
+                drawing[property] = value
+            end);
         end
     end
     return drawing;
@@ -110,6 +111,64 @@ function Visuals:AddTracer(from, properties, offset)
     return Line;
 end
 
+local getPointOffsets = function(size)
+    local sizeX, sizeY, sizeZ = size.X, size.Y, size.Z
+    local _sizeX, _sizeY, _sizeZ = -size.X, -size.Y, -size.Z
+
+    return {
+        Vector3.new(sizeX, sizeY, _sizeZ),
+        Vector3.new(sizeX, _sizeY, _sizeZ),
+        Vector3.new(_sizeX, _sizeY, _sizeZ),
+        Vector3.new(_sizeX, sizeY, _sizeZ),
+        Vector3.new(sizeX, sizeY, _sizeZ),
+        Vector3.new(sizeX, sizeY, sizeZ),
+        Vector3.new(sizeX, _sizeY, sizeZ),
+        Vector3.new(sizeX, _sizeY, _sizeZ),
+
+        Vector3.new(sizeX, _sizeY, sizeZ),
+        Vector3.new(_sizeX, _sizeY, sizeZ),
+        Vector3.new(_sizeX, sizeY, sizeZ),
+        Vector3.new(sizeX, sizeY, sizeZ),
+        Vector3.new(_sizeX, sizeY, sizeZ),
+        Vector3.new(_sizeX, sizeY, _sizeZ),
+        Vector3.new(_sizeX, _sizeY, _sizeZ),
+        Vector3.new(_sizeX, _sizeY, sizeZ)
+    };
+end
+
+function Visuals:Add3DBox(object, properties)
+    properties = properties or {};
+    object = object or self.object;
+
+    local basePart = object;
+	local size;
+    if (object:IsA("Model")) then
+		basePart = object.PrimaryPart
+        size = object:GetExtentsSize();
+    elseif (object:IsA("BasePart")) then
+        size = object.Size
+    else
+        error("#1 basepart or model expected");
+    end
+
+    local points = {};
+    local pointOffsets = getPointOffsets(size / 2);
+
+    for i = 1, #pointOffsets do
+        local pointOffset = pointOffsets[i]
+        local point = PointInstance.new(basePart, CFrame.new(pointOffset));
+        point.RotationType = CFrameRotationType.TargetRelative
+        points[#points + 1] = point
+    end
+
+    local Poly = DrawUtils:Create(PolyLineDynamic, properties, points);
+
+    self:SetDefaults(Poly, properties);
+    self:AddDrawing(Poly);
+
+	return Poly;
+end
+
 function Visuals:Add2DBox(object, offset1, offset2, properties)
     properties = properties or {};
     object = object or self.object
@@ -118,8 +177,8 @@ function Visuals:Add2DBox(object, offset1, offset2, properties)
 
         local tPoint = PointInstance.new(object, offset1 or CFrame.new(objectSize.X, objectSize.Y, 0));
         local bPoint = PointInstance.new(object, offset2 or CFrame.new(-objectSize.X, -objectSize.Y, 0));
-        tPoint.RotationType = CFrameRotationType.CameraRelative
-        bPoint.RotationType = CFrameRotationType.CameraRelative
+        tPoint.RotationType = CFrameRotationType.TargetRelative
+        bPoint.RotationType = CFrameRotationType.TargetRelative
 
         local _Rect = DrawUtils:Create(RectDynamic, properties, tPoint, bPoint);
 
@@ -156,7 +215,7 @@ function Visuals:AddHealthBar(character, root, colourA, colorB, filled, humanoid
     end
 
 
-    for i, drawingData in pairs(self.drawings) do
+    for i, drawingData in self.drawings do
         if (drawingData.drawing == healthBarOutline or drawingData.drawing == healthBarHealth) then
             self.drawings[i] = nil
         end
@@ -179,7 +238,7 @@ function Visuals:AddHealthBar(character, root, colourA, colorB, filled, humanoid
 
     if (humanoid) then
         humanoid:GetPropertyChangedSignal("Health"):Connect(function()
-            updateHealth(humanoid.Health, humanoid.MaxHealth);
+            updateHealth(nil, humanoid.Health, humanoid.MaxHealth);
         end);
     end
 
@@ -199,49 +258,86 @@ function Visuals:AddHealthBar(character, root, colourA, colorB, filled, humanoid
     return ret;
 end
 
-function Visuals:Destroy()
-    for i, drawingData in pairs(self.drawings) do
-        drawingData.drawing.Visible = false
+function Visuals:Highlight(adornee, properties)
+    properties = properties or {};
+    adornee = adornee or self.object
+
+    local highlight = Instance.new("Highlight");
+    local hui = gethui();
+    local highlights = hui:FindFirstChild("Highlights");
+    if (not highlights) then
+        highlights = Instance.new("Folder");
+        highlights.Name = "Highlights"
+        highlights.Parent = hui
     end
-    table.clear(self.drawings);
+    highlight.Parent = highlights
+    highlight.Adornee = adornee
+
+    local drawings = self.drawings
+    drawings[#drawings + 1] = {
+        drawing = highlight,
+        type = "Highlight"
+    };
+
+    return highlight;
 end
 
-function Visuals:GetDrawings(drawingType, first)
+function Visuals:SetTag(drawing, tag)
+    local drawingData;
+    for i, _drawingData in pairs(self.drawings or {}) do
+        if (_drawingData.drawing == drawing) then
+            drawingData = _drawingData;
+            break;
+        end
+    end
+
+    drawingData.tag = tag
+end
+
+function Visuals:GetDrawingsFromTag(tag, first)
     local results = {};
-    for i, drawingData in pairs(self.drawings) do
-        if (drawingType == nil or drawingType == drawingData.type) then
-            results[#results + 1] = drawingData.drawing
+    for i, _drawingData in self.drawings or allDrawings do
+        if (_drawingData.tag == tag) then
+            local drawing = _drawingData.drawing
+            if (_drawingData.type == "HealthBar") then
+                results[#results + 1] = drawing.healthBarHealth
+                results[#results + 1] = drawing.healthBarOutline
+                continue;
+            end
+            results[#results + 1] = drawing
         end
     end
 
     return first and results[1] or results;
 end
 
+function Visuals:SetProperties(tag, values)
+    local drawings = self:GetDrawingsFromTag(tag, self.drawings ~= nil);
+
+    for i, drawing in drawings do
+        for property, value in values do
+            if (drawing[property] ~= nil) then
+                drawing[property] = value
+            end
+        end
+    end
+end
+
+function Visuals:Destroy()
+    for i, drawingData in self.drawings do
+        local drawing = drawingData.drawing
+        if (drawing.type == "Highlight") then
+            drawing.Enabled = false
+            drawing:Destroy();
+        else
+            drawing.Visible = false
+        end
+    end
+    table.clear(self.drawings);
+end
+
 function Visuals:GetAllDrawings()
     return allDrawings;
-end
-
-function Visuals:SetProperties(drawingType, values)
-	local t = type(drawingType) == "table";
-	for i, drawingData in pairs(self.drawings) do
-        if (drawingType == nil or drawingType == drawingData.type or (t and table.find(drawingType, drawingData.type))) then
-            for property, value in pairs(values) do
-                drawingData.drawing[property] = value
-            end
-        end
-    end
-end
-
-function Visuals:SetAllProperties(drawingType, values)
-	local t = type(drawingType) == "table";
-    for i, drawingData in pairs(allDrawings) do
-		local _type = drawingData.type
-        if ((drawingType == nil or drawingType == _type or (t and table.find(drawingType, type))) and not t == "HealthBar") then
-            for property, value in pairs(values) do
-                drawingData.drawing[property] = value
-            end
-        end
-    end
 end
 
 --[[
@@ -258,7 +354,11 @@ for i, player in pairs(players) do
         Visual:AddHealthBar(character, root, Color3.new(1, 1, 1), Color3.new(0, 1, 0), false, character.Humanoid);
         local size = character:GetExtentsSize();
         Visual:Add2DBox(root, CFrame.new(size.X / 2, size.Y / 2, 0), CFrame.new(-size.X / 2, -size.Y / 2, 0));
+        Visual:Add3DBox(character);
+        --Visual:Highlight(character);
+		--Visual:Add3DBox(character);
     end
-end]]
+end
+]]
 
 return Visuals;
