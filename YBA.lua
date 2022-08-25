@@ -1,7 +1,6 @@
 local RunService = game:GetService("RunService")
 local UILibrary = loadfile("UILibrary.lua")();
-local VisualsLib = loadfile("Visuals.lua")();
-local Visuals = VisualsLib.new();
+local Visuals = loadfile("Visuals.lua")();
 local Services = setmetatable({}, {
     __index = function(self, serviceName)
         local good, service = pcall(game.GetService, game, serviceName);
@@ -93,45 +92,10 @@ local tp_to = function(pos)
     local char = LocalPlayer.Character
     if (not char) then return; end
     local root = char:FindFirstChild("HumanoidRootPart");
-    local hum = char:FindFirstChild("Humanoid");
-
-    local posX = pos.Position.X
-    local posY = pos.Position.Y + 30
-    local posZ = pos.Position.Z
-
-    while true do
-        local x = root.Position.X
-        local y = root.Position.Y
-        local z = root.Position.Z
-
-        if (x > posX and (x - posX) > 5) then
-            x -= math.min(incDist, x - posX)
-        elseif (x < posX and (posX - x) > 5) then
-             x += math.min(incDist, posX - x);
-        end
-        if (y > posY and (y - posY) > 5) then
-            y -= math.min(incDist, y - posY)
-        elseif (y < posY and (posY - y) > 5) then
-            y += math.min(incDist, posY - y);
-        end
-        if (z > posZ and (z - posZ) > 5) then
-            z -= math.min(incDist, z - posZ)
-        elseif (z < posZ and (posZ - z) > 5) then
-             z += math.min(incDist, posZ - z);
-        end
-        local rootPos = root.Position
-        local posPos = pos.Position
-        local pos1 = Vector3.new(rootPos.X, 0, rootPos.Z);
-        local pos2 = Vector3.new(posPos.X, 0, posPos.Z);
-        if ((pos1 - pos2).Magnitude < 5) then
-            break;
-        end
-        root.Anchored = false
-        root.CFrame = CFrame.new(x, y, z);
-        wait();
-        root.Anchored = true
-        hum:ChangeState(Enum.HumanoidStateType.Landed);
-    end
+    root.Anchored = true
+    wait();
+    root.CFrame = pos
+    wait();
     root.Anchored = false
 end
 
@@ -175,17 +139,28 @@ local serverhop = function(order)
     Services.TeleportService:TeleportToPlaceInstance(game.PlaceId, Server.id);    
 end
 
+local old;
+old = hookmetamethod(game, "__namecall", function(self, ...)
+    local args = {...};
+    if (getnamecallmethod() == "InvokeServer" and args[1] == "idklolbrah2de") then
+        return "  ___XP DE KEY"
+    end
+    return old(self, ...);
+end);
+
 local living = Workspace:FindFirstChild("Living");
 local gameLocations = Workspace:FindFirstChild("Locations");
 
 local mainWindow = UILibrary:CreateWindow("Fate Hub", "Your Bizzare Adventure", Color3.fromRGB(100, 0, 255));
 
-local visuals = mainWindow:Tab("Teleports");
+local teleports = mainWindow:Tab("Teleports");
 
-local locations = visuals:Section("Locations");
-
+local locations = teleports:Section("Locations");
+local visuals = mainWindow:Tab("Visuals");
+local locations_2 = visuals:Section("Locations");
 
 local locations_ = {};
+local locations_visuals = {};
 for i, location in pairs(gameLocations:GetChildren()) do
     local locationName = location.Name
     if (locations_[locationName]) then
@@ -197,8 +172,15 @@ for i, location in pairs(gameLocations:GetChildren()) do
         until not locations_[newName]
         locationName = newName
     end
-    locations_[locationName] = location.CFrame
+    locations_[locationName] = location.CFrame * CFrame.new(0, -10, 0);
     locations:Button(locationName, function()
         tp_to(locations_[locationName]);
+    end);
+    local locationVisual = Visuals.new(location);
+    local text = locationVisual:AddText(locationName, {
+        Visible = false
+    });
+    locations_2:Toggle(locationName, false, function(callback)
+        text.Visible = callback
     end);
 end
