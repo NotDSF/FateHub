@@ -1,3 +1,5 @@
+setthreadidentity(8)
+
 if getgenv().fah then
     getgenv().fah:Destroy()
 end
