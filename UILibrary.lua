@@ -8,7 +8,7 @@ local UserInputService = game:GetService('UserInputService')
 local TweenService = game:GetService('TweenService')
 local RunService = game:GetService("RunService");
 local HttpService = game:GetService("HttpService");
-local Mouse = game.Players.LocalPlayer:GetMouse()
+local Mouse = game:GetService("Players").LocalPlayer:GetMouse()
 
 local Instance_new = Instance.new
 local UDim2_new = UDim2.new
